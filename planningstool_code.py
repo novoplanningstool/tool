@@ -768,7 +768,7 @@ if uploaded_file is not None:
 # =============================================================================
             #import pandas.io.formats.excel
 
-            pd.io.formats.excel.ExcelFormatter.header_style = None
+            #pd.io.formats.excel.ExcelFormatter.header_style = None
         
             def to_excel(df):
                 output = BytesIO()
@@ -959,7 +959,9 @@ st.write("""
 #          st.image("https://raw.githubusercontent.com/NovoPW/Planningstool/main/Stage_is_leuk.png")
 #          
 # =============================================================================
-         
+
+#verandering op 25-5-2023: regel 771 verwijderd.
+
 #OM TE RUNNEN:
 
 #open terminal van ML via anaconda navigator
