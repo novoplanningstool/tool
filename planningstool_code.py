@@ -942,7 +942,7 @@ if uploaded_file is not None:
                 
                 worksheet.conditional_format('A1:Z51', {'type':'cell',
                                     'criteria': 'not equal to','value': 50,'format': line_w})
-                writer.save()
+                writer.close()
                 processed_data = output.getvalue()
             
                 return processed_data
