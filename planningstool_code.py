@@ -35,14 +35,14 @@ st.markdown("#")
 
 uploaded_file = st.file_uploader("Selecteer hier het databestand waarin de gegevens over de werknemers en machines staan.")
 if uploaded_file is not None:
-    dataframe = pd.read_excel(uploaded_file, sheet_name='Werknemers')
-    dataframe2 = pd.read_excel(uploaded_file, sheet_name='Taken')
-    dataframe3 = pd.read_excel(uploaded_file, sheet_name='Uitzendkracht')
+    werknemersDataFrame = pd.read_excel(uploaded_file, sheet_name='Werknemers')
+    takenDataFrame = pd.read_excel(uploaded_file, sheet_name='Taken')
+    uitzendKrachtDataFrame = pd.read_excel(uploaded_file, sheet_name='Uitzendkracht')
     df_pre_concat_list = []
     
-    col1 = set(dataframe.columns)
-    col2 = set(dataframe2.Taken)
-    col3 = set(dataframe3.columns)
+    col1 = set(werknemersDataFrame.columns)
+    col2 = set(takenDataFrame.Taken)
+    col3 = set(uitzendKrachtDataFrame.columns)
     for i in ['Werknemers','Aanwezig','Pools','Nederlands','Vrije dagen']:
         col1.remove(i)
         col3.remove(i)
@@ -59,7 +59,7 @@ if uploaded_file is not None:
     
     
     
-    new_df = dataframe
+    new_werknemersDataFrame = werknemersDataFrame
     st.markdown("#")  
     
 # =============================================================================
@@ -118,16 +118,16 @@ if uploaded_file is not None:
     if st.checkbox("Zet iedereen op afwezig"):
         default_aanwezigen = []
     else:
-        default_aanwezigen = list(new_df["Werknemers"])
+        default_aanwezigen = list(new_werknemersDataFrame["Werknemers"])
     aanwezigen = st.multiselect(
-         'Wie zijn er aanwezig?',new_df['Werknemers'],default_aanwezigen)
+         'Wie zijn er aanwezig?',new_werknemersDataFrame['Werknemers'],default_aanwezigen)
     #aanwezigen verwerken:
-    for i in range(len(new_df["Werknemers"])):
-        if new_df["Werknemers"][i] in aanwezigen:
-            new_df["Aanwezig"][i] = 1
-            mensen_op_de_werkvloer.append(new_df["Werknemers"][i])
+    for i in range(len(new_werknemersDataFrame["Werknemers"])):
+        if new_werknemersDataFrame["Werknemers"][i] in aanwezigen:
+            new_werknemersDataFrame["Aanwezig"][i] = 1
+            mensen_op_de_werkvloer.append(new_werknemersDataFrame["Werknemers"][i])
         else:
-            new_df["Aanwezig"][i] = 0
+            new_werknemersDataFrame["Aanwezig"][i] = 0
             
     
     
@@ -141,10 +141,10 @@ if uploaded_file is not None:
     if st.checkbox("Wil je zelf het aantal uitzendkrachten opgeven?"):
         uitzendkrachten = st.number_input("Hoeveel uitzendkrachten zijn er?",min_value=0, value = 1, step = 1)
         for i in range(int(uitzendkrachten)):
-            uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(dataframe3.loc[0,dataframe3.columns!="Werknemers"])
+            uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(uitzendKrachtDataFrame.loc[0,uitzendKrachtDataFrame.columns!="Werknemers"])
             df_uitzendkracht_skills = pd.DataFrame(uitzendkracht_skills).transpose()
-            df_uitzendkracht_skills.columns = new_df.columns
-            new_df = pd.concat([new_df, df_uitzendkracht_skills], ignore_index = True)
+            df_uitzendkracht_skills.columns = new_werknemersDataFrame.columns
+            new_werknemersDataFrame = pd.concat([new_werknemersDataFrame, df_uitzendkracht_skills], ignore_index = True)
     else:
         uitzendkrachten = 0
     st.text("")
@@ -173,7 +173,7 @@ if uploaded_file is not None:
 #     else:
 #         #new_df = dataframe
 # =============================================================================
-    new_df2 = dataframe2
+    new_takenDataFrame = takenDataFrame
     
     
     
@@ -189,7 +189,7 @@ if uploaded_file is not None:
             speciale_taak = st.text_input("".join(["Hoe heet deze ",str(i+1),"e taak die toegevoegd moet worden?"]))
             speciale_mense = st.multiselect(
                 "".join(["Wie gaan deze ",str(i+1),"e taak uitvoeren?"]),
-                new_df['Werknemers'][new_df["Aanwezig"]==1])
+                new_werknemersDataFrame['Werknemers'][new_werknemersDataFrame["Aanwezig"]==1])
             for i in range(3):
                 st.write(" ")
             speciale_mensen_list = speciale_mensen_list + speciale_mense
@@ -197,7 +197,7 @@ if uploaded_file is not None:
                 speciale_taken_list.append(speciale_taak)
                 #speciale_mensen_niveau_list.append(new_df[speciale_taak][speciaal_mens])
                 mensen_aanwezig_niet_in_planning.append(speciaal_mens)
-                new_df["Aanwezig"][new_df["Werknemers"]==speciaal_mens]=0
+                new_werknemersDataFrame["Aanwezig"][new_werknemersDataFrame["Werknemers"]==speciaal_mens]=0
         df_speciale_taken_mensen = pd.DataFrame([speciale_taken_list,speciale_mensen_list]).T   
         
         #maximum op opgegeven bovengrens capaciteit taak? #!!!!!
@@ -223,31 +223,31 @@ if uploaded_file is not None:
     
 
     
-    vooraf_aanwezig = list(new_df2["Taken"])
+    vooraf_aanwezig = list(new_takenDataFrame["Taken"])
     if st.checkbox("Zet alle taken uit"):
-        vooraf_aanwezig = list(new_df2["Taken"][new_df2["Aan"]==1])
+        vooraf_aanwezig = list(new_takenDataFrame["Taken"][new_takenDataFrame["Aan"]==1])
     aanwezige_taken = st.multiselect(
-         'Welke taken moeten er gedaan worden?',new_df2['Taken'],vooraf_aanwezig)
+         'Welke taken moeten er gedaan worden?',new_takenDataFrame['Taken'],vooraf_aanwezig)
     #aanwezige taken verwerken:
-    for i in range(len(new_df2["Taken"])):
-        if new_df2["Taken"][i] in aanwezige_taken:
-            new_df2["Aan"][i] = 1
+    for i in range(len(new_takenDataFrame["Taken"])):
+        if new_takenDataFrame["Taken"][i] in aanwezige_taken:
+            new_takenDataFrame["Aan"][i] = 1
         else:
-            new_df2["Aan"][i] = 0
+            new_takenDataFrame["Aan"][i] = 0
     
     st.markdown("#")
     
     st.write("Hoeveel mensen zijn er nodig op elke taak?")
 
-    grid_return4 = AgGrid(new_df2[['Taken','Aantal']][new_df2['Aan']==1], editable=True, fit_columns_on_grid_load=True)
+    grid_return4 = AgGrid(new_takenDataFrame[['Taken','Aantal']][new_takenDataFrame['Aan']==1], editable=True, fit_columns_on_grid_load=True)
     temp = grid_return4['data']
-    for i in new_df2['Taken'][new_df2['Aan']==1]:
-        new_df2.loc[new_df2['Taken']==i,'Aantal'] = int(temp['Aantal'][temp['Taken']==i])
+    for i in new_takenDataFrame['Taken'][new_takenDataFrame['Aan']==1]:
+        new_takenDataFrame.loc[new_takenDataFrame['Taken']==i,'Aantal'] = int(temp['Aantal'][temp['Taken']==i])
     
     
-    if len(new_df[new_df['Aanwezig'] == 1]) > sum(new_df2[new_df2['Aan']==1]['Aantal']):
-        aantal_werknemers = len(new_df[new_df['Aanwezig'] == 1])
-        aantal_benodigd_voor_taken = sum(new_df2[new_df2['Aan']==1]['Aantal'])
+    if len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1]) > sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']):
+        aantal_werknemers = len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1])
+        aantal_benodigd_voor_taken = sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal'])
         
         st.write(f'LET OP: Het aantal werknemers is niet gelijk aan het benodigde aantal werknemers voor alle taken. Er zijn {aantal_werknemers} werknemers aanwezig en er zijn {aantal_benodigd_voor_taken} werknemers nodig om alle taken af te kunnen ronden.')
     
@@ -266,14 +266,14 @@ if uploaded_file is not None:
         #speciale_mensen_niveau_list = []
         speciale_taken_list = []
         for i in range(int(aantal_taken)):
-            speciale_taak = st.selectbox("".join(["Wat is de ",str(i+1),"e taak?"]),new_df2["Taken"][new_df2["Aan"]==1])
-            new_df2["Aan"][new_df2["Taken"]==speciale_taak]=0
+            speciale_taak = st.selectbox("".join(["Wat is de ",str(i+1),"e taak?"]),new_takenDataFrame["Taken"][new_takenDataFrame["Aan"]==1])
+            new_takenDataFrame["Aan"][new_takenDataFrame["Taken"]==speciale_taak]=0
             speciale_mensen = st.multiselect(
-                 "".join(["Wie gaan deze ",str(i+1),"e taak uitvoeren?"]),new_df['Werknemers'][new_df["Aanwezig"]==1])
-            if len(speciale_mensen)==int(new_df2["Aantal"][new_df2["Taken"]==speciale_taak]):
+                 "".join(["Wie gaan deze ",str(i+1),"e taak uitvoeren?"]),new_werknemersDataFrame['Werknemers'][new_werknemersDataFrame["Aanwezig"]==1])
+            if len(speciale_mensen)==int(new_takenDataFrame["Aantal"][new_takenDataFrame["Taken"]==speciale_taak]):
                 st.write("Je hebt het juiste aantal mensen geselecteerd voor deze taak!")
             else:
-                st.write("Je moet nog ",int(new_df2["Aantal"][new_df2["Taken"]==speciale_taak])-len(speciale_mensen)," werknemers kiezen voor deze taak." )
+                st.write("Je moet nog ",int(new_takenDataFrame["Aantal"][new_takenDataFrame["Taken"]==speciale_taak])-len(speciale_mensen)," werknemers kiezen voor deze taak." )
             for i in range(3):
                 st.write(" ")
             speciale_mensen_list = speciale_mensen_list + speciale_mensen
@@ -281,7 +281,7 @@ if uploaded_file is not None:
                 speciale_taken_list.append(speciale_taak)
                 #speciale_mensen_niveau_list.append(new_df[speciale_taak][speciaal_mens])
                 mensen_aanwezig_niet_in_planning.append(speciaal_mens)
-                new_df["Aanwezig"][new_df["Werknemers"]==speciaal_mens]=0
+                new_werknemersDataFrame["Aanwezig"][new_werknemersDataFrame["Werknemers"]==speciaal_mens]=0
         df_speciale_taken_mensen = pd.DataFrame([speciale_taken_list,speciale_mensen_list]).T   
         
         #maximum op opgegeven bovengrens capaciteit taak? #!!!!!
@@ -325,23 +325,23 @@ if uploaded_file is not None:
     st.markdown("#")
     
     if st.checkbox('Planning genereren'):    
-        if len(new_df[new_df['Aanwezig'] == 1]) > sum(new_df2[new_df2['Aan']==1]['Aantal']):
-            aantal_werknemers = len(new_df[new_df['Aanwezig'] == 1])
-            aantal_benodigd_voor_taken = sum(new_df2[new_df2['Aan']==1]['Aantal'])
+        if len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1]) > sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']):
+            aantal_werknemers = len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1])
+            aantal_benodigd_voor_taken = sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal'])
             st.error(f'LET OP: Het aantal werknemers is niet gelijk aan het benodigde aantal werknemers voor alle taken. Er zijn {aantal_werknemers} werknemers aanwezig en er zijn {aantal_benodigd_voor_taken} werknemers nodig om alle taken af te kunnen ronden.')
         else:
             #uitzendkrachten automatisch aanvullen
-            if len(new_df[new_df['Aanwezig'] == 1]) < sum(new_df2[new_df2['Aan']==1]['Aantal']):
-                aantal_benodigde_uitzendkrachten = sum(new_df2[new_df2['Aan']==1]['Aantal']) - len(new_df[new_df['Aanwezig'] == 1])
+            if len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1]) < sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']):
+                aantal_benodigde_uitzendkrachten = sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']) - len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1])
                 st.warning(f'WARNING: Het aantal werknemers is kleiner dan het benodigde aantal werknemers voor alle taken. Er zijn {aantal_benodigde_uitzendkrachten} uitzendkrachten toegevoegd om te voldoen aan de hoeveelheid taken.')
                 #Voeg uitzendkrachten toe
-                for i in range(sum(new_df2[new_df2['Aan']==1]['Aantal']) - len(new_df[new_df['Aanwezig'] == 1])):
-                    uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(dataframe3.loc[0,dataframe3.columns!="Werknemers"])
+                for i in range(sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']) - len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1])):
+                    uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(uitzendKrachtDataFrame.loc[0,uitzendKrachtDataFrame.columns!="Werknemers"])
                     df_uitzendkracht_skills = pd.DataFrame(uitzendkracht_skills).transpose()
-                    df_uitzendkracht_skills.columns = new_df.columns
-                    new_df = pd.concat([new_df, df_uitzendkracht_skills], ignore_index = True)
-            data_werknemers = new_df
-            data_machines = new_df2
+                    df_uitzendkracht_skills.columns = new_werknemersDataFrame.columns
+                    new_werknemersDataFrame = pd.concat([new_werknemersDataFrame, df_uitzendkracht_skills], ignore_index = True)
+            data_werknemers = new_werknemersDataFrame
+            data_machines = new_takenDataFrame
             
              
 # =============================================================================
@@ -482,7 +482,7 @@ if uploaded_file is not None:
             
             ### CONSTRAINT 3: op iedere taak worden evenveel mensen ingepland als dat er nodig zijn
             for taak in taken:
-                aantal_taak = new_df2.loc[taak,'Aantal']
+                aantal_taak = new_takenDataFrame.loc[taak,'Aantal']
 # =============================================================================
 #                 for level in levels:
 #                     aantal_level = teamsize[vorm_teamsize.index((level,taak))]
