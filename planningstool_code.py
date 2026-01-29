@@ -123,11 +123,11 @@ if uploaded_file is not None:
          'Wie zijn er aanwezig?',new_werknemersDataFrame['Werknemers'],default_aanwezigen)
     #aanwezigen verwerken:
     for i in range(len(new_werknemersDataFrame["Werknemers"])):
-        if new_werknemersDataFrame["Werknemers"][i] in aanwezigen:
-            new_werknemersDataFrame["Aanwezig"][i] = 1
-            mensen_op_de_werkvloer.append(new_werknemersDataFrame["Werknemers"][i])
-        else:
-            new_werknemersDataFrame["Aanwezig"][i] = 0
+      if new_werknemersDataFrame.loc[i, "Werknemers"] in aanwezigen:
+          new_werknemersDataFrame.loc[i, "Aanwezig"] = 1
+          mensen_op_de_werkvloer.append(new_werknemersDataFrame.loc[i, "Werknemers"])
+      else:
+          new_werknemersDataFrame.loc[i, "Aanwezig"] = 0
             
     
     
@@ -141,7 +141,7 @@ if uploaded_file is not None:
     if st.checkbox("Wil je zelf het aantal uitzendkrachten opgeven?"):
         uitzendkrachten = st.number_input("Hoeveel uitzendkrachten zijn er?",min_value=0, value = 1, step = 1)
         for i in range(int(uitzendkrachten)):
-            uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(uitzendKrachtDataFrame.loc[0,uitzendKrachtDataFrame.columns!="Werknemers"])
+            uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(uitzendKrachtDataFrame.drop(columns=['Werknemers']).iloc[0])
             df_uitzendkracht_skills = pd.DataFrame(uitzendkracht_skills).transpose()
             df_uitzendkracht_skills.columns = new_werknemersDataFrame.columns
             new_werknemersDataFrame = pd.concat([new_werknemersDataFrame, df_uitzendkracht_skills], ignore_index = True)
@@ -197,7 +197,7 @@ if uploaded_file is not None:
                 speciale_taken_list.append(speciale_taak)
                 #speciale_mensen_niveau_list.append(new_df[speciale_taak][speciaal_mens])
                 mensen_aanwezig_niet_in_planning.append(speciaal_mens)
-                new_werknemersDataFrame["Aanwezig"][new_werknemersDataFrame["Werknemers"]==speciaal_mens]=0
+                new_werknemersDataFrame.loc[new_werknemersDataFrame["Werknemers"]==speciaal_mens, "Aanwezig"] = 0
         df_speciale_taken_mensen = pd.DataFrame([speciale_taken_list,speciale_mensen_list]).T   
         
         #maximum op opgegeven bovengrens capaciteit taak? #!!!!!
@@ -230,10 +230,10 @@ if uploaded_file is not None:
          'Welke taken moeten er gedaan worden?',new_takenDataFrame['Taken'],vooraf_aanwezig)
     #aanwezige taken verwerken:
     for i in range(len(new_takenDataFrame["Taken"])):
-        if new_takenDataFrame["Taken"][i] in aanwezige_taken:
-            new_takenDataFrame["Aan"][i] = 1
-        else:
-            new_takenDataFrame["Aan"][i] = 0
+      if new_takenDataFrame.loc[i, "Taken"] in aanwezige_taken:
+          new_takenDataFrame.loc[i, "Aan"] = 1
+      else:
+          new_takenDataFrame.loc[i, "Aan"] = 0
     
     st.markdown("#")
     
@@ -242,7 +242,7 @@ if uploaded_file is not None:
     grid_return4 = AgGrid(new_takenDataFrame[['Taken','Aantal']][new_takenDataFrame['Aan']==1], editable=True, fit_columns_on_grid_load=True)
     temp = grid_return4['data']
     for i in new_takenDataFrame['Taken'][new_takenDataFrame['Aan']==1]:
-        new_takenDataFrame.loc[new_takenDataFrame['Taken']==i,'Aantal'] = int(temp['Aantal'][temp['Taken']==i])
+        new_takenDataFrame.loc[new_takenDataFrame['Taken']==i,'Aantal'] = int(temp.loc[temp['Taken']==i, 'Aantal'].iloc[0])
     
     
     if len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1]) > sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']):
@@ -267,13 +267,13 @@ if uploaded_file is not None:
         speciale_taken_list = []
         for i in range(int(aantal_taken)):
             speciale_taak = st.selectbox("".join(["Wat is de ",str(i+1),"e taak?"]),new_takenDataFrame["Taken"][new_takenDataFrame["Aan"]==1])
-            new_takenDataFrame["Aan"][new_takenDataFrame["Taken"]==speciale_taak]=0
+            new_takenDataFrame.loc[new_takenDataFrame["Taken"]==speciale_taak, "Aan"] = 0
             speciale_mensen = st.multiselect(
                  "".join(["Wie gaan deze ",str(i+1),"e taak uitvoeren?"]),new_werknemersDataFrame['Werknemers'][new_werknemersDataFrame["Aanwezig"]==1])
-            if len(speciale_mensen)==int(new_takenDataFrame["Aantal"][new_takenDataFrame["Taken"]==speciale_taak]):
+            if len(speciale_mensen)==int(new_takenDataFrame.loc[new_takenDataFrame["Taken"]==speciale_taak, "Aantal"].iloc[0]):
                 st.write("Je hebt het juiste aantal mensen geselecteerd voor deze taak!")
             else:
-                st.write("Je moet nog ",int(new_takenDataFrame["Aantal"][new_takenDataFrame["Taken"]==speciale_taak])-len(speciale_mensen)," werknemers kiezen voor deze taak." )
+                st.write("Je moet nog ",int(new_takenDataFrame.loc[new_takenDataFrame["Taken"]==speciale_taak, "Aantal"].iloc[0])-len(speciale_mensen)," werknemers kiezen voor deze taak." )
             for i in range(3):
                 st.write(" ")
             speciale_mensen_list = speciale_mensen_list + speciale_mensen
@@ -281,7 +281,7 @@ if uploaded_file is not None:
                 speciale_taken_list.append(speciale_taak)
                 #speciale_mensen_niveau_list.append(new_df[speciale_taak][speciaal_mens])
                 mensen_aanwezig_niet_in_planning.append(speciaal_mens)
-                new_werknemersDataFrame["Aanwezig"][new_werknemersDataFrame["Werknemers"]==speciaal_mens]=0
+                new_werknemersDataFrame.loc[new_werknemersDataFrame["Werknemers"]==speciaal_mens, "Aanwezig"] = 0
         df_speciale_taken_mensen = pd.DataFrame([speciale_taken_list,speciale_mensen_list]).T   
         
         #maximum op opgegeven bovengrens capaciteit taak? #!!!!!
@@ -336,7 +336,7 @@ if uploaded_file is not None:
                 st.warning(f'WARNING: Het aantal werknemers is kleiner dan het benodigde aantal werknemers voor alle taken. Er zijn {aantal_benodigde_uitzendkrachten} uitzendkrachten toegevoegd om te voldoen aan de hoeveelheid taken.')
                 #Voeg uitzendkrachten toe
                 for i in range(sum(new_takenDataFrame[new_takenDataFrame['Aan']==1]['Aantal']) - len(new_werknemersDataFrame[new_werknemersDataFrame['Aanwezig'] == 1])):
-                    uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(uitzendKrachtDataFrame.loc[0,uitzendKrachtDataFrame.columns!="Werknemers"])
+                    uitzendkracht_skills = ["".join(["Uitzendkracht ",str(i+1)])] + list(uitzendKrachtDataFrame.drop(columns=['Werknemers']).iloc[0])
                     df_uitzendkracht_skills = pd.DataFrame(uitzendkracht_skills).transpose()
                     df_uitzendkracht_skills.columns = new_werknemersDataFrame.columns
                     new_werknemersDataFrame = pd.concat([new_werknemersDataFrame, df_uitzendkracht_skills], ignore_index = True)
@@ -363,13 +363,13 @@ if uploaded_file is not None:
             # de overige ('rest') benodigde competenties verwerken
             for i in data_taken.index:
                 # hoeveel mensen er per niveau er al minimaal moeten zijn
-                ingepland = data_taken.Aantal_min_niveau_2[i]+data_taken.Aantal_min_niveau_1[i]+data_taken.Aantal_min_niveau_3[i]
+                ingepland = data_taken.loc[i, 'Aantal_min_niveau_2'] + data_taken.loc[i, 'Aantal_min_niveau_1'] + data_taken.loc[i, 'Aantal_min_niveau_3']
                 # kijken of er sprake is van een minimaal niveau van de rest/overige
-                if data_taken.Aantal[i] > ingepland:
+                if data_taken.loc[i, 'Aantal'] > ingepland:
                     # als er iets staat als: 1v1, 2v2 en DE REST NIVEAU 2,dan plannen we hier de 'rest' op niveau 2.
                     # bepaal eerst het restant werknemers, hier genaamd 'overig'
-                    niet_ingedeeld = data_taken.Aantal[i] - ingepland
-                    data_taken.loc[i,"".join(("Aantal_min_niveau_", str(int(data_taken.Rest_min_niveau[i]))))] += niet_ingedeeld
+                    niet_ingedeeld = data_taken.loc[i, 'Aantal'] - ingepland
+                    data_taken.loc[i,"".join(("Aantal_min_niveau_", str(int(data_taken.loc[i, 'Rest_min_niveau']))))] += niet_ingedeeld
             
             # dataframe met alleen competenties
             df_comp = data_aanwezig.loc[:,data_taken.Taken]
@@ -388,7 +388,7 @@ if uploaded_file is not None:
             skill = np.zeros(len(vorm_skill))
 
             for taak in taken:
-                naam_taak = data_taken.Taken[taak]
+                naam_taak = data_taken.loc[taak, 'Taken']
                 for werknemer in werknemers:
                     for level in levels:
                         
@@ -569,7 +569,7 @@ if uploaded_file is not None:
                                 for taak in taken:
                                     count += skill[vorm_skill.index((level,werknemer,taak))]
                             if count == 0:
-                                mensen_alleen_4.append(data_aanwezig.Werknemers[werknemer])
+                                mensen_alleen_4.append(data_aanwezig.loc[werknemer, 'Werknemers'])
 
                         if len(mensen_alleen_4) == 1:
                             st.warning(mensen_alleen_4[0] + ' bezit op de huidige taken alleen niveau 4, diegene kan dus nergens ingepland worden en daardoor loopt de planning fout. Selecteer een andere taak, een andere medewerker of pas het competentieniveau van deze persoon aan.')
@@ -584,7 +584,7 @@ if uploaded_file is not None:
                                 for werknemer in werknemers:
                                     count += skill[vorm_skill.index((level,werknemer,taak))]
                             if count == 0:
-                                taken_alleen_4.append(data_taken.Taken[taak])
+                                taken_alleen_4.append(data_taken.loc[taak, 'Taken'])
                                     
                         if len(taken_alleen_4) == 1:
                             st.warning('Voor de taak ' + taken_alleen_4[0] + ' is niemand aanwezig die niet niveau 4 heeft. Daardoor kan er niemand worden ingepland. Zorg ervoor dat er een werknemer met een ander niveau aanwezig is, of dat de taak niet wordt uitgevoerd.')
@@ -641,13 +641,13 @@ if uploaded_file is not None:
             
             solution_def = solution.loc[solution['waarde']==1,['werknemer','taak','level']]
             for mens in solution_def.index:
-                naam_ind = int(solution_def.werknemer[mens])
-                naam = data_aanwezig.Werknemers[naam_ind]
-                solution_def.loc[mens,'werknemer'] = naam
-                
-                taak_ind = int(solution_def.taak[mens])
-                taak = data_taken.Taken[taak_ind]
-                solution_def.loc[mens,'taak'] = taak
+              naam_ind = int(solution_def.loc[mens, 'werknemer'])
+              naam = data_aanwezig.loc[naam_ind, 'Werknemers']
+              solution_def.loc[mens,'werknemer'] = naam
+              
+              taak_ind = int(solution_def.loc[mens, 'taak'])
+              taak = data_taken.loc[taak_ind, 'Taken']
+              solution_def.loc[mens,'taak'] = taak
 
 # =============================================================================
 # HIER EINDIGD HET WISKUNDIG MODEL    
@@ -667,9 +667,9 @@ if uploaded_file is not None:
 
             # Werknemers toevoegen aan de values van de keys (taken)
             for i in solution_def.index:
-                taak = solution_def.taak[i]
-                werknemer = solution_def.werknemer[i]
-                oplossing[taak].append(werknemer)
+              taak = solution_def.loc[i, 'taak']
+              werknemer = solution_def.loc[i, 'werknemer']
+              oplossing[taak].append(werknemer)
                 
             
 
