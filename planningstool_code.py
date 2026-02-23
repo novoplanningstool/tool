@@ -150,7 +150,7 @@ if uploaded_file is not None:
 
     st.write("Hoeveel mensen zijn er nodig op elke taak?")
 
-    grid_edited_tasks = st.data_editor(new_takenDataFrame[['Taken','Aantal']][new_takenDataFrame['Aan']==1], disabled=['Taken'], use_container_width=True)
+    grid_edited_tasks = st.data_editor(new_takenDataFrame[['Taken','Aantal']][new_takenDataFrame['Aan']==1], disabled=['Taken'], width="stretch")
     for i in new_takenDataFrame['Taken'][new_takenDataFrame['Aan']==1]:
         new_takenDataFrame.loc[new_takenDataFrame['Taken']==i,'Aantal'] = int(grid_edited_tasks.loc[grid_edited_tasks['Taken']==i, 'Aantal'].iloc[0])
 
