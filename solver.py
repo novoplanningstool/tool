@@ -162,7 +162,7 @@ def _build_model(params, objective_type, data_taken,
 
     if objective_type == 'Iedereen staat zo veel mogelijk op een machine waar hij nog over moet leren':
         deviation_vars = [
-            LpVariable("u({},{})".format(l, t), cat=LpInteger)
+            LpVariable("u({},{})".format(l, t), lowBound=0, cat=LpInteger)
             for (l, t) in product(levels, taken)
         ]
         model += lpSum([
@@ -182,7 +182,7 @@ def _build_model(params, objective_type, data_taken,
 
     if objective_type == 'Op de belangrijke taken staan goede mensen, op de rest staan beginners':
         deviation_vars = [
-            LpVariable("u({},{})".format(l, t), cat=LpInteger)
+            LpVariable("u({},{})".format(l, t), lowBound=0, cat=LpInteger)
             for (l, t) in product(levels, taken)
         ]
         model += (
