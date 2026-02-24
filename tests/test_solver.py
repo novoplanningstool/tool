@@ -1,8 +1,6 @@
 """Tests for solver module."""
 
-import numpy as np
 import pandas as pd
-import pytest
 
 from data_loading import process_remaining_skill_levels
 from solver import SolverParams, SolveResult, build_and_solve, build_solver_parameters
@@ -31,7 +29,8 @@ class TestBuildSolverParameters:
         alice_idx = 0
         ompakken_idx = 0
         for level in [1, 2, 3]:
-            idx = params.skill_index_tuples.index((level, alice_idx, ompakken_idx))
+            idx = params.skill_index_tuples.index(
+                (level, alice_idx, ompakken_idx))
             assert params.skill_eligible[idx] == 1
 
     def test_skill_eligible_for_beginner(self, present_workers, data_taken):
@@ -40,7 +39,8 @@ class TestBuildSolverParameters:
         charlie_idx = 2
         ompakken_idx = 0
         for level in [1, 2]:
-            idx = params.skill_index_tuples.index((level, charlie_idx, ompakken_idx))
+            idx = params.skill_index_tuples.index(
+                (level, charlie_idx, ompakken_idx))
             assert params.skill_eligible[idx] == 0
         idx = params.skill_index_tuples.index((3, charlie_idx, ompakken_idx))
         assert params.skill_eligible[idx] == 1
@@ -66,12 +66,14 @@ class TestBuildSolverParameters:
 class TestBuildAndSolve:
     def test_optimal_solution_found(self, present_workers, data_taken):
         params = build_solver_parameters(present_workers, data_taken)
-        result = build_and_solve(params, OBJECTIVE_MAXIMIZE, data_taken, present_workers)
+        result = build_and_solve(
+            params, OBJECTIVE_MAXIMIZE, data_taken, present_workers)
         assert result.status == "optimal"
 
     def test_each_worker_assigned_once(self, present_workers, data_taken):
         params = build_solver_parameters(present_workers, data_taken)
-        result = build_and_solve(params, OBJECTIVE_MAXIMIZE, data_taken, present_workers)
+        result = build_and_solve(
+            params, OBJECTIVE_MAXIMIZE, data_taken, present_workers)
 
         assigned = result.raw_solution_df[result.raw_solution_df["waarde"] == 1]
         worker_ids = assigned["werknemer"].tolist()
@@ -79,7 +81,8 @@ class TestBuildAndSolve:
 
     def test_task_headcount_satisfied(self, present_workers, data_taken):
         params = build_solver_parameters(present_workers, data_taken)
-        result = build_and_solve(params, OBJECTIVE_MAXIMIZE, data_taken, present_workers)
+        result = build_and_solve(
+            params, OBJECTIVE_MAXIMIZE, data_taken, present_workers)
 
         assigned = result.raw_solution_df[result.raw_solution_df["waarde"] == 1]
         for task_idx in data_taken.index:

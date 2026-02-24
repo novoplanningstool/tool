@@ -1,11 +1,11 @@
-"""LP model building, solving, and fallback constraint relaxation."""
+"""MIP model building, solving, and fallback constraint relaxation."""
 
 from dataclasses import dataclass, field
 from itertools import product
 
 import numpy as np
 import pandas as pd
-from pulp import LpProblem, LpVariable, lpSum, LpMinimize, LpMaximize, LpBinary, LpInteger, PULP_CBC_CMD
+from mip import Model, xsum, minimize, maximize, BINARY, INTEGER, CBC, OptimizationStatus
 
 
 @dataclass
@@ -91,24 +91,25 @@ def build_solver_parameters(present_workers, data_taken):
     )
 
 
-def _extract_solution_variables(assignment_vars, skill_index_tuples):
+def _extract_solution_variables(model, skill_index_tuples):
     """Extract assignment variable values from solved model into a DataFrame."""
     raw_solution_df = pd.DataFrame(columns=['x', 'level', 'werknemer', 'taak', 'waarde'])
     count = 0
-    for var, (level, worker, task) in zip(assignment_vars, skill_index_tuples):
-        if var.varValue is not None:
-            raw_solution_df.loc[count, 'x'] = var.name
-            raw_solution_df.loc[count, 'level'] = str(level)
-            raw_solution_df.loc[count, 'werknemer'] = str(worker)
-            raw_solution_df.loc[count, 'taak'] = str(task)
-            raw_solution_df.loc[count, 'waarde'] = var.varValue
-            count += 1
+    for v in model.vars:
+        if v.name[0] == 'x':
+            raw_solution_df.loc[count, 'x'] = v.name
+            [v1, v2, v3] = v.name.split('(')[1].split(')')[0].split(',')
+            raw_solution_df.loc[count, 'level'] = v1
+            raw_solution_df.loc[count, 'werknemer'] = v2
+            raw_solution_df.loc[count, 'taak'] = v3
+            raw_solution_df.loc[count, 'waarde'] = v.x
+        count += 1
     return raw_solution_df
 
 
 def _build_model(params, objective_type, data_taken,
                  include_language=True, skill_level_mode='full'):
-    """Build an LP model with configurable constraint groups.
+    """Build a MIP model with configurable constraint groups.
 
     Parameters
     ----------
@@ -120,7 +121,7 @@ def _build_model(params, objective_type, data_taken,
 
     Returns
     -------
-    tuple: (model, assignment_vars, collab_vars, collab_index_tuples)
+    model : Model
     """
     levels = params.levels
     taken = params.taken
@@ -132,108 +133,86 @@ def _build_model(params, objective_type, data_taken,
     language_index_tuples = params.language_index_tuples
     language_incompatible = params.language_incompatible
 
-    # --- Determine sense ---
-    if objective_type == 'Iedereen doet waar hij het beste in is':
-        sense = LpMaximize
-    else:
-        sense = LpMinimize
-
-    model = LpProblem("planning", sense)
+    model = Model(solver_name=CBC)
 
     # --- Decision Variables ---
-    assignment_vars = [
-        LpVariable("x({},{},{})".format(l, w, t), cat=LpBinary)
-        for (l, w, t) in product(levels, werknemers, taken)
-    ]
+    X = [model.add_var(name="x({},{},{})".format(l, w, t), var_type=BINARY)
+         for (l, w, t) in product(levels, werknemers, taken)]
 
     collab_index_tuples = list(product(werknemers, werknemers, taken[data_taken.Samenwerken == 1]))
-    collab_vars = [
-        LpVariable("t({},{},{})".format(i, j, t), cat=LpBinary)
-        for (i, j, t) in collab_index_tuples
-    ]
+    T = [model.add_var(name="t({},{},{})".format(i, j, t), var_type=BINARY)
+         for (i, j, t) in collab_index_tuples]
 
     # --- Objective Functions ---
     if objective_type == 'Iedereen doet waar hij het beste in is':
-        model += lpSum([
-            assignment_vars[skill_index_tuples.index((1, w, t))]
-            + 0.5 * assignment_vars[skill_index_tuples.index((2, w, t))]
+        model.objective = maximize(xsum(
+            X[skill_index_tuples.index((1, w, t))] + 0.5 * X[skill_index_tuples.index((2, w, t))]
             for w in werknemers for t in taken
-        ])
+        ))
 
     if objective_type == 'Iedereen staat zo veel mogelijk op een machine waar hij nog over moet leren':
-        deviation_vars = [
-            LpVariable("u({},{})".format(l, t), cat=LpInteger)
-            for (l, t) in product(levels, taken)
-        ]
-        model += lpSum([
-            deviation_vars[teamsize_index_tuples.index((l, t))]
-            for l in levels for t in taken
-        ])
+        U = [model.add_var(name="u({},{})".format(l, t), var_type=INTEGER)
+             for (l, t) in product(levels, taken)]
+
+        model.objective = minimize(xsum(
+            U[teamsize_index_tuples.index((l, t))] for l in levels for t in taken
+        ))
+
         for level in levels:
             for taak in taken:
-                model += (lpSum([
-                    assignment_vars[skill_index_tuples.index((level, w, taak))]
-                    for w in werknemers
-                ]) - min_workers_per_level[teamsize_index_tuples.index((level, taak))] <= deviation_vars[teamsize_index_tuples.index((level, taak))])
-                model += (-(lpSum([
-                    assignment_vars[skill_index_tuples.index((level, w, taak))]
-                    for w in werknemers
-                ]) - min_workers_per_level[teamsize_index_tuples.index((level, taak))]) <= deviation_vars[teamsize_index_tuples.index((level, taak))])
+                model += xsum(
+                    X[skill_index_tuples.index((level, w, taak))] for w in werknemers
+                ) - min_workers_per_level[teamsize_index_tuples.index((level, taak))] <= U[teamsize_index_tuples.index((level, taak))]
+                model += -(xsum(
+                    X[skill_index_tuples.index((level, w, taak))] for w in werknemers
+                ) - min_workers_per_level[teamsize_index_tuples.index((level, taak))]) <= U[teamsize_index_tuples.index((level, taak))]
 
     if objective_type == 'Op de belangrijke taken staan goede mensen, op de rest staan beginners':
-        deviation_vars = [
-            LpVariable("u({},{})".format(l, t), cat=LpInteger)
-            for (l, t) in product(levels, taken)
-        ]
-        model += (
-            lpSum([deviation_vars[teamsize_index_tuples.index((l, t))] / 2 for l in levels for t in taken])
-            + lpSum([assignment_vars[skill_index_tuples.index((3, w, t))] for w in werknemers for t in taken])
-            + lpSum([assignment_vars[skill_index_tuples.index((2, w, t))] / 2 for w in werknemers for t in taken])
+        U = [model.add_var(name="u({},{})".format(l, t), var_type=INTEGER)
+             for (l, t) in product(levels, taken)]
+
+        model.objective = minimize(
+            xsum(U[teamsize_index_tuples.index((l, t))] / 2 for l in levels for t in taken)
+            + xsum(X[skill_index_tuples.index((3, w, t))] for w in werknemers for t in taken)
+            + xsum(X[skill_index_tuples.index((2, w, t))] / 2 for w in werknemers for t in taken)
         )
+
         for level in levels:
             for taak in taken:
-                model += (lpSum([
-                    assignment_vars[skill_index_tuples.index((level, w, taak))]
-                    for w in werknemers
-                ]) - min_workers_per_level[teamsize_index_tuples.index((level, taak))] <= deviation_vars[teamsize_index_tuples.index((level, taak))])
-                model += (-(lpSum([
-                    assignment_vars[skill_index_tuples.index((level, w, taak))]
-                    for w in werknemers
-                ]) - min_workers_per_level[teamsize_index_tuples.index((level, taak))]) <= deviation_vars[teamsize_index_tuples.index((level, taak))])
+                model += xsum(
+                    X[skill_index_tuples.index((level, w, taak))] for w in werknemers
+                ) - min_workers_per_level[teamsize_index_tuples.index((level, taak))] <= U[teamsize_index_tuples.index((level, taak))]
+                model += -(xsum(
+                    X[skill_index_tuples.index((level, w, taak))] for w in werknemers
+                ) - min_workers_per_level[teamsize_index_tuples.index((level, taak))]) <= U[teamsize_index_tuples.index((level, taak))]
 
     # --- Constraints ---
 
     # CONSTRAINT 1: each worker gets exactly 1 task
     for werknemer in werknemers:
-        model += (lpSum([
-            assignment_vars[skill_index_tuples.index((l, werknemer, t))]
-            for l in levels for t in taken
-        ]) == 1)
+        model += (xsum(X[skill_index_tuples.index((l, werknemer, t))] for l in levels for t in taken) == 1)
 
     # CONSTRAINT 2: a worker is only assigned at a level they actually have
     for level in levels:
         for werknemer in werknemers:
             for taak in taken:
-                model += (assignment_vars[skill_index_tuples.index((level, werknemer, taak))]
+                model += (X[skill_index_tuples.index((level, werknemer, taak))]
                           <= skill_eligible[skill_index_tuples.index((level, werknemer, taak))])
 
     # CONSTRAINT 3: each task gets exactly the required headcount
     for taak in taken:
         aantal_taak = data_taken.loc[taak, 'Aantal']
-        model += (lpSum([
-            assignment_vars[skill_index_tuples.index((l, w, taak))]
-            for l in levels for w in werknemers
-        ]) == aantal_taak)
+        model += (xsum(X[skill_index_tuples.index((l, w, taak))] for l in levels for w in werknemers) == aantal_taak)
 
     # CONSTRAINT 4: minimum skill level requirements
     if skill_level_mode in ('full', 'partial'):
         for taak in taken:
             aantal_min_level1 = data_taken.loc[taak, 'Aantal_min_niveau_1']
-            model += (lpSum([assignment_vars[skill_index_tuples.index((1, w, taak))] for w in werknemers]) >= aantal_min_level1)
+            model += (xsum(X[skill_index_tuples.index((1, w, taak))] for w in werknemers) >= aantal_min_level1)
         if skill_level_mode == 'full':
             for taak in taken:
                 aantal_max_level3 = data_taken.loc[taak, 'Aantal_min_niveau_3']
-                model += (lpSum([assignment_vars[skill_index_tuples.index((3, w, taak))] for w in werknemers]) <= aantal_max_level3)
+                model += (xsum(X[skill_index_tuples.index((3, w, taak))] for w in werknemers) <= aantal_max_level3)
 
     # CONSTRAINT 5: language compatibility
     if include_language:
@@ -241,26 +220,25 @@ def _build_model(params, objective_type, data_taken,
             ind = werknemers.tolist().index(worker_i)
             for worker_j in werknemers[ind + 1:]:
                 for taak in taken[data_taken.Samenwerken == 1]:
-                    model += (lpSum([assignment_vars[skill_index_tuples.index((l, worker_i, taak))] for l in levels]) >= collab_vars[collab_index_tuples.index((worker_i, worker_j, taak))])
-                    model += (lpSum([assignment_vars[skill_index_tuples.index((l, worker_j, taak))] for l in levels]) >= collab_vars[collab_index_tuples.index((worker_i, worker_j, taak))])
-                    model += (lpSum([
-                        assignment_vars[skill_index_tuples.index((l, worker_i, taak))]
-                        + assignment_vars[skill_index_tuples.index((l, worker_j, taak))]
+                    model += (xsum(X[skill_index_tuples.index((l, worker_i, taak))] for l in levels) >= T[collab_index_tuples.index((worker_i, worker_j, taak))])
+                    model += (xsum(X[skill_index_tuples.index((l, worker_j, taak))] for l in levels) >= T[collab_index_tuples.index((worker_i, worker_j, taak))])
+                    model += (xsum(
+                        X[skill_index_tuples.index((l, worker_i, taak))] + X[skill_index_tuples.index((l, worker_j, taak))]
                         for l in levels
-                    ]) - 1 <= collab_vars[collab_index_tuples.index((worker_i, worker_j, taak))])
+                    ) - 1 <= T[collab_index_tuples.index((worker_i, worker_j, taak))])
 
         for taak in taken[data_taken.Samenwerken == 1]:
-            model += (lpSum([
-                collab_vars[collab_index_tuples.index((worker_i, worker_j, taak))]
+            model += (xsum(
+                T[collab_index_tuples.index((worker_i, worker_j, taak))]
                 * language_incompatible[language_index_tuples.index((worker_i, worker_j))]
                 for worker_i in werknemers for worker_j in werknemers
-            ]) == 0)
+            ) == 0)
 
-    return model, assignment_vars, collab_vars, collab_index_tuples
+    return model
 
 
 def build_and_solve(params, objective_type, data_taken, present_workers):
-    """Create LP model, solve, and return SolveResult.
+    """Create MIP model, solve, and return SolveResult.
 
     Parameters
     ----------
@@ -281,7 +259,6 @@ def build_and_solve(params, objective_type, data_taken, present_workers):
 
     raw_solution_df = pd.DataFrame(columns=['x', 'level', 'werknemer', 'taak', 'waarde'])
     warnings = []
-    solver = PULP_CBC_CMD(msg=0, timeLimit=300)
 
     # --- Relaxation attempts ---
     relaxation_configs = [
@@ -298,12 +275,11 @@ def build_and_solve(params, objective_type, data_taken, present_workers):
     ]
 
     for attempt, config in enumerate(relaxation_configs):
-        model, assignment_vars, _, _ = _build_model(
-            params, objective_type, data_taken, **config)
-        model.solve(solver)
+        model = _build_model(params, objective_type, data_taken, **config)
+        status = model.optimize(max_seconds=300)
 
-        if model.status == 1:  # OPTIMAL
-            raw_solution_df = _extract_solution_variables(assignment_vars, skill_index_tuples)
+        if status == OptimizationStatus.OPTIMAL:
+            raw_solution_df = _extract_solution_variables(model, skill_index_tuples)
 
             if attempt == 0:
                 return SolveResult(
@@ -327,7 +303,7 @@ def build_and_solve(params, objective_type, data_taken, present_workers):
                 warnings=warnings,
             )
 
-        if model.status != -1:  # not INFEASIBLE — some other status
+        if status != OptimizationStatus.INFEASIBLE:
             return SolveResult(
                 status='other',
                 raw_solution_df=raw_solution_df,

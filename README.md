@@ -6,7 +6,7 @@ A Streamlit web app that generates optimized daily work schedules for NOVO Packa
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.11 (mip==1.15.0 requires >=3.7,<3.12)
 
 ### Install dependencies
 

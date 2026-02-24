@@ -1,7 +1,6 @@
 """Tests for postprocessing module."""
 
 import pandas as pd
-import pytest
 
 from postprocessing import (
     build_full_planning,
@@ -145,7 +144,8 @@ class TestRenameBoardColumns:
     def test_columns_renamed(self):
         df = pd.DataFrame({0: ["Alice"], 1: ["Bob"], 2: ["Charlie"]})
         result = rename_board_columns(df)
-        assert list(result.columns) == ["Werknemer 1", "Werknemer 2", "Werknemer 3"]
+        assert list(result.columns) == [
+            "Werknemer 1", "Werknemer 2", "Werknemer 3"]
 
     def test_single_column(self):
         df = pd.DataFrame({0: ["Alice"]})

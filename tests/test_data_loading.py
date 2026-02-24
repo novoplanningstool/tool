@@ -4,7 +4,6 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pandas as pd
-import pytest
 
 from data_loading import (
     add_temp_workers,
@@ -20,17 +19,20 @@ from data_loading import (
 
 class TestValidateTaskColumns:
     def test_consistent_columns_returns_empty_set(self, werknemers_df, taken_df, uitzendkracht_df):
-        result = validate_task_columns(werknemers_df, taken_df, uitzendkracht_df)
+        result = validate_task_columns(
+            werknemers_df, taken_df, uitzendkracht_df)
         assert result == set()
 
     def test_extra_column_in_werknemers_detected(self, werknemers_df, taken_df, uitzendkracht_df):
         werknemers_df["ExtraTask"] = [1, 2, 3]
-        result = validate_task_columns(werknemers_df, taken_df, uitzendkracht_df)
+        result = validate_task_columns(
+            werknemers_df, taken_df, uitzendkracht_df)
         assert "ExtraTask" in result
 
     def test_missing_column_in_uitzendkracht_detected(self, werknemers_df, taken_df, uitzendkracht_df):
         uitzendkracht_df = uitzendkracht_df.drop(columns=["Ompakken"])
-        result = validate_task_columns(werknemers_df, taken_df, uitzendkracht_df)
+        result = validate_task_columns(
+            werknemers_df, taken_df, uitzendkracht_df)
         assert "Ompakken" in result
 
 
@@ -40,32 +42,38 @@ class TestValidateTaskColumns:
 class TestComputeDefaultDay:
     def test_monday_returns_1(self):
         with patch("data_loading.datetime") as mock_dt:
-            mock_dt.datetime.today.return_value = datetime(2026, 2, 16)  # Monday
+            mock_dt.datetime.today.return_value = datetime(
+                2026, 2, 16)  # Monday
             assert compute_default_day() == 1
 
     def test_wednesday_returns_3(self):
         with patch("data_loading.datetime") as mock_dt:
-            mock_dt.datetime.today.return_value = datetime(2026, 2, 18)  # Wednesday
+            mock_dt.datetime.today.return_value = datetime(
+                2026, 2, 18)  # Wednesday
             assert compute_default_day() == 3
 
     def test_thursday_returns_4(self):
         with patch("data_loading.datetime") as mock_dt:
-            mock_dt.datetime.today.return_value = datetime(2026, 2, 19)  # Thursday
+            mock_dt.datetime.today.return_value = datetime(
+                2026, 2, 19)  # Thursday
             assert compute_default_day() == 4
 
     def test_friday_returns_0(self):
         with patch("data_loading.datetime") as mock_dt:
-            mock_dt.datetime.today.return_value = datetime(2026, 2, 20)  # Friday
+            mock_dt.datetime.today.return_value = datetime(
+                2026, 2, 20)  # Friday
             assert compute_default_day() == 0
 
     def test_saturday_returns_0(self):
         with patch("data_loading.datetime") as mock_dt:
-            mock_dt.datetime.today.return_value = datetime(2026, 2, 21)  # Saturday
+            mock_dt.datetime.today.return_value = datetime(
+                2026, 2, 21)  # Saturday
             assert compute_default_day() == 0
 
     def test_sunday_returns_0(self):
         with patch("data_loading.datetime") as mock_dt:
-            mock_dt.datetime.today.return_value = datetime(2026, 2, 22)  # Sunday
+            mock_dt.datetime.today.return_value = datetime(
+                2026, 2, 22)  # Sunday
             assert compute_default_day() == 0
 
 
@@ -90,7 +98,8 @@ class TestAddTempWorkers:
         assert temp_row["Krimpen"] == uitzendkracht_df.iloc[0]["Krimpen"]
 
     def test_start_index_parameter(self, werknemers_df, uitzendkracht_df):
-        result = add_temp_workers(werknemers_df, uitzendkracht_df, count=2, start_index=5)
+        result = add_temp_workers(
+            werknemers_df, uitzendkracht_df, count=2, start_index=5)
         names = result["Werknemers"].tolist()
         assert names[-2] == "Uitzendkracht 5"
         assert names[-1] == "Uitzendkracht 6"
@@ -105,7 +114,8 @@ class TestAddTempWorkers:
 
 class TestBuildTaskWorkerMap:
     def test_basic_mapping(self):
-        input_df = pd.DataFrame({0: ["TaskA", "TaskA", "TaskB"], 1: ["Alice", "Bob", "Charlie"]})
+        input_df = pd.DataFrame(
+            {0: ["TaskA", "TaskA", "TaskB"], 1: ["Alice", "Bob", "Charlie"]})
         result = build_task_worker_map(input_df)
 
         assert set(result.index) == {"TaskA", "TaskB"}

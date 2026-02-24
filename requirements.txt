@@ -1,6 +1,6 @@
 streamlit>=1.40.0
 pandas>=2.2.0,<3
 openpyxl>=3.1.5
-pulp>=2.7.0
+mip==1.15.0
 numpy>=2.0.0
 xlsxwriter>=3.2.0
