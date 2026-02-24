@@ -1,8 +1,6 @@
 streamlit>=1.40.0
-pandas>=2.0.0
+pandas>=2.2.0,<3
 openpyxl>=3.1.5
-streamlit-aggrid>=1.0.5
-mip==1.15.0
-numpy>=1.26.4
+pulp>=2.7.0
+numpy>=2.0.0
 xlsxwriter>=3.2.0
-protobuf>=4.25.0
