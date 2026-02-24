@@ -166,3 +166,104 @@ class TestSolveResultDefaults:
         assert result.level4_only_workers == []
         assert result.level4_only_tasks == []
         assert result.relaxation_attempt == 0
+
+
+# --- Production-scale integration tests (20 workers, 12 tasks) ---
+
+
+def _get_assignments(result):
+    """Extract assigned (worker_idx, task_idx, level) tuples from raw solution."""
+    assigned = result.raw_solution_df[result.raw_solution_df["waarde"] == 1].copy()
+    assigned["werknemer"] = assigned["werknemer"].astype(int)
+    assigned["taak"] = assigned["taak"].astype(int)
+    assigned["level"] = assigned["level"].astype(int)
+    return assigned
+
+
+ALL_OBJECTIVES = [OBJECTIVE_MAXIMIZE, OBJECTIVE_MINIMIZE, OBJECTIVE_HYBRID]
+
+
+@pytest.mark.parametrize("objective", ALL_OBJECTIVES)
+class TestProductionScaleSolver:
+    """Integration tests using a realistic 20-worker / 12-task scenario."""
+
+    def test_solves_optimal(self, production_present_workers, production_data_taken, objective):
+        params = build_solver_parameters(production_present_workers, production_data_taken)
+        result = build_and_solve(params, objective, production_data_taken, production_present_workers)
+        assert result.status == "optimal", f"Expected optimal, got {result.status}"
+        assert result.relaxation_attempt == 0
+        assert result.warnings == []
+
+    def test_each_worker_assigned_exactly_once(self, production_present_workers, production_data_taken, objective):
+        params = build_solver_parameters(production_present_workers, production_data_taken)
+        result = build_and_solve(params, objective, production_data_taken, production_present_workers)
+        assigned = _get_assignments(result)
+
+        worker_ids = assigned["werknemer"].tolist()
+        assert len(worker_ids) == 20, f"Expected 20 assignments, got {len(worker_ids)}"
+        assert len(worker_ids) == len(set(worker_ids)), "Duplicate worker assignments found"
+
+    def test_task_headcount_satisfied(self, production_present_workers, production_data_taken, objective):
+        params = build_solver_parameters(production_present_workers, production_data_taken)
+        result = build_and_solve(params, objective, production_data_taken, production_present_workers)
+        assigned = _get_assignments(result)
+
+        for task_idx in production_data_taken.index:
+            count = len(assigned[assigned["taak"] == task_idx])
+            expected = production_data_taken.loc[task_idx, "Aantal"]
+            task_name = production_data_taken.loc[task_idx, "Taken"]
+            assert count == expected, f"{task_name}: expected {expected} workers, got {count}"
+
+    def test_skill_eligibility_respected(self, production_present_workers, production_data_taken, objective):
+        params = build_solver_parameters(production_present_workers, production_data_taken)
+        result = build_and_solve(params, objective, production_data_taken, production_present_workers)
+        assigned = _get_assignments(result)
+
+        for _, row in assigned.iterrows():
+            worker_idx = row["werknemer"]
+            task_idx = row["taak"]
+            level = row["level"]
+            task_name = production_data_taken.loc[task_idx, "Taken"]
+            actual_skill = production_present_workers.loc[worker_idx, task_name]
+            assert actual_skill <= level, (
+                f"Worker {worker_idx} has skill {actual_skill} on {task_name}, "
+                f"but was assigned at level {level}"
+            )
+
+    def test_language_compatibility_on_warehousing(self, production_present_workers, production_data_taken, objective):
+        params = build_solver_parameters(production_present_workers, production_data_taken)
+        result = build_and_solve(params, objective, production_data_taken, production_present_workers)
+        assigned = _get_assignments(result)
+
+        # Find Warehousing task index (Samenwerken == 1)
+        warehousing_idx = production_data_taken[
+            production_data_taken["Taken"] == "Warehousing"
+        ].index[0]
+        warehousing_workers = assigned[assigned["taak"] == warehousing_idx]["werknemer"].tolist()
+
+        # Every pair of workers on Warehousing must share a language
+        for i, w1 in enumerate(warehousing_workers):
+            for w2 in warehousing_workers[i + 1:]:
+                nl_shared = (production_present_workers.loc[w1, "Nederlands"]
+                             + production_present_workers.loc[w2, "Nederlands"]) == 2
+                pl_shared = (production_present_workers.loc[w1, "Pools"]
+                             + production_present_workers.loc[w2, "Pools"]) == 2
+                assert nl_shared or pl_shared, (
+                    f"Workers {w1} and {w2} on Warehousing share no language"
+                )
+
+    def test_minimum_skill_level_requirements(self, production_present_workers, production_data_taken, objective):
+        params = build_solver_parameters(production_present_workers, production_data_taken)
+        result = build_and_solve(params, objective, production_data_taken, production_present_workers)
+        assigned = _get_assignments(result)
+
+        for task_idx in production_data_taken.index:
+            task_name = production_data_taken.loc[task_idx, "Taken"]
+            min_l1 = production_data_taken.loc[task_idx, "Aantal_min_niveau_1"]
+            if min_l1 > 0:
+                l1_count = len(assigned[
+                    (assigned["taak"] == task_idx) & (assigned["level"] == 1)
+                ])
+                assert l1_count >= min_l1, (
+                    f"{task_name}: needs {min_l1} level-1 workers, got {l1_count}"
+                )
