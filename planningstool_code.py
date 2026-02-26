@@ -10,6 +10,7 @@ import streamlit as st
 from data_loading import (
     validate_task_columns,
     compute_default_day,
+    get_employees_with_day_off,
     add_temp_workers,
     build_task_worker_map,
     process_remaining_skill_levels,
@@ -68,13 +69,37 @@ if uploaded_file is not None:
 
     # --- Employee Attendance ---
 
+    # Manage attendance selection entirely via session state so that
+    # changing the day automatically removes employees with a day off.
+    employees_with_day_off = get_employees_with_day_off(new_werknemersDataFrame, dag)
+
+    if 'previous_dag' not in st.session_state:
+        st.session_state.previous_dag = dag
+    if 'aanwezigen_select' not in st.session_state:
+        st.session_state.aanwezigen_select = [
+            name for name in new_werknemersDataFrame["Werknemers"]
+            if name not in employees_with_day_off
+        ]
+    if dag != st.session_state.previous_dag:
+        previous_day_off = get_employees_with_day_off(new_werknemersDataFrame, st.session_state.previous_dag)
+        # Restore employees who had the previous day off but not the new day off
+        to_restore = [name for name in previous_day_off if name not in employees_with_day_off]
+        # Remove employees who have the new day off
+        updated = [
+            name for name in st.session_state.aanwezigen_select
+            if name not in employees_with_day_off
+        ] + to_restore
+        # Preserve original order
+        all_names = list(new_werknemersDataFrame["Werknemers"])
+        st.session_state.aanwezigen_select = [name for name in all_names if name in updated]
+        st.session_state.previous_dag = dag
+
     mensen_op_de_werkvloer = []
     if st.checkbox("Zet iedereen op afwezig"):
-        default_aanwezigen = []
-    else:
-        default_aanwezigen = list(new_werknemersDataFrame["Werknemers"])
+        st.session_state.aanwezigen_select = []
     aanwezigen = st.multiselect(
-         'Wie zijn er aanwezig?',new_werknemersDataFrame['Werknemers'],default_aanwezigen)
+         'Wie zijn er aanwezig?',new_werknemersDataFrame['Werknemers'],
+         key='aanwezigen_select')
     for i in range(len(new_werknemersDataFrame["Werknemers"])):
       if new_werknemersDataFrame.loc[i, "Werknemers"] in aanwezigen:
           new_werknemersDataFrame.loc[i, "Aanwezig"] = 1
