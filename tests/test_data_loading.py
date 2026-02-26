@@ -10,6 +10,7 @@ from data_loading import (
     add_temp_workers,
     build_task_worker_map,
     compute_default_day,
+    get_employees_with_day_off,
     process_remaining_skill_levels,
     validate_task_columns,
 )
@@ -67,6 +68,63 @@ class TestComputeDefaultDay:
         with patch("data_loading.datetime") as mock_dt:
             mock_dt.datetime.today.return_value = datetime(2026, 2, 22)  # Sunday
             assert compute_default_day() == 0
+
+
+# --- get_employees_with_day_off ---
+
+
+class TestGetEmployeesWithDayOff:
+    def test_single_day_match(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice", "Bob", "Charlie"],
+            "Vrije dagen": ["maandag", None, "vrijdag"],
+        })
+        assert get_employees_with_day_off(df, "maandag") == ["Alice"]
+
+    def test_no_match(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice", "Bob"],
+            "Vrije dagen": ["maandag", "vrijdag"],
+        })
+        assert get_employees_with_day_off(df, "woensdag") == []
+
+    def test_multiple_days_space_separated(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice"],
+            "Vrije dagen": ["dinsdag donderdag"],
+        })
+        assert get_employees_with_day_off(df, "dinsdag") == ["Alice"]
+        assert get_employees_with_day_off(df, "donderdag") == ["Alice"]
+        assert get_employees_with_day_off(df, "maandag") == []
+
+    def test_multiple_days_comma_separated(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice"],
+            "Vrije dagen": ["maandag, woensdag"],
+        })
+        assert get_employees_with_day_off(df, "maandag") == ["Alice"]
+        assert get_employees_with_day_off(df, "woensdag") == ["Alice"]
+
+    def test_all_nan_returns_empty(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice", "Bob"],
+            "Vrije dagen": [None, None],
+        })
+        assert get_employees_with_day_off(df, "maandag") == []
+
+    def test_case_insensitive(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice"],
+            "Vrije dagen": ["Maandag"],
+        })
+        assert get_employees_with_day_off(df, "maandag") == ["Alice"]
+
+    def test_multiple_employees_same_day_off(self):
+        df = pd.DataFrame({
+            "Werknemers": ["Alice", "Bob", "Charlie"],
+            "Vrije dagen": ["vrijdag", None, "vrijdag"],
+        })
+        assert get_employees_with_day_off(df, "vrijdag") == ["Alice", "Charlie"]
 
 
 # --- add_temp_workers ---

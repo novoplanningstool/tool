@@ -28,6 +28,20 @@ def compute_default_day():
     return 0
 
 
+def get_employees_with_day_off(employees_df, day):
+    """Return list of employee names whose 'Vrije dagen' includes the given day."""
+    result = []
+    day_lower = day.strip().lower()
+    for i in range(len(employees_df)):
+        raw_value = employees_df.loc[i, "Vrije dagen"]
+        if pd.isna(raw_value):
+            continue
+        days_off = [d.strip().lower() for d in str(raw_value).replace(",", " ").split()]
+        if day_lower in days_off:
+            result.append(employees_df.loc[i, "Werknemers"])
+    return result
+
+
 def add_temp_workers(werknemers_df, uitzendkracht_df, count, start_index=1):
     """Append `count` temp worker rows to werknemers_df using the uitzendkracht template.
 
