@@ -1,0 +1,86 @@
+@rendermode InteractiveServer
+@using Novo.Planning.Domain.Models
+@using Novo.Planning.Domain.Interfaces
+@inject ITaskDefinitionRepository TaskDefinitionRepository
+
+@if (_loading)
+{
+    <p><em>Taken laden...</em></p>
+}
+else if (_tasks.Count == 0)
+{
+    <p>Geen taken beschikbaar. Voeg eerst taken toe.</p>
+}
+else
+{
+    <table class="table table-sm table-bordered">
+        <thead>
+            <tr>
+                <th>Taak</th>
+                <th>Vaardigheidsniveau</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var task in _tasks)
+            {
+                <tr>
+                    <td>@task.Name</td>
+                    <td>
+                        <select class="form-select form-select-sm"
+                                value="@GetSkillValue(task.Name)"
+                                @onchange="e => OnSkillChanged(task.Name, e)">
+                            @foreach (var level in _skillLevels)
+                            {
+                                <option value="@((int)level.Value)">@level.Label</option>
+                            }
+                        </select>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public Dictionary<string, SkillLevel> Skills { get; set; } = [];
+    [Parameter] public EventCallback<Dictionary<string, SkillLevel>> SkillsChanged { get; set; }
+
+    private List<TaskDefinition> _tasks = [];
+    private bool _loading = true;
+
+    private static readonly (string Label, SkillLevel Value)[] _skillLevels =
+    [
+        ("1 - Expert", SkillLevel.Expert),
+        ("2 - Ervaren", SkillLevel.Experienced),
+        ("3 - Beginner", SkillLevel.Beginner),
+        ("4 - Kan niet", SkillLevel.Cannot),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var allTasks = await TaskDefinitionRepository.GetAllAsync();
+        _tasks = allTasks.Where(t => t.IsActive).OrderBy(t => t.SortOrder).ThenBy(t => t.Name).ToList();
+
+        // Ensure all active tasks have an entry in the skills dictionary
+        foreach (var task in _tasks)
+        {
+            Skills.TryAdd(task.Name, SkillLevel.Cannot);
+        }
+
+        _loading = false;
+    }
+
+    private int GetSkillValue(string taskName)
+    {
+        return (int)Skills.GetValueOrDefault(taskName, SkillLevel.Cannot);
+    }
+
+    private async Task OnSkillChanged(string taskName, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var level) && Enum.IsDefined(typeof(SkillLevel), level))
+        {
+            Skills[taskName] = (SkillLevel)level;
+            await SkillsChanged.InvokeAsync(Skills);
+        }
+    }
+}

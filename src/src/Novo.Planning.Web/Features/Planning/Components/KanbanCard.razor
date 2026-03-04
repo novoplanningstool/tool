@@ -1,0 +1,56 @@
+<div class="kanban-card badge @GetBadgeClass() me-1 mb-1"
+     draggable="true"
+     data-drag-worker="@Assignment.WorkerName"
+     data-drag-source="@Assignment.TaskName"
+     style="cursor: grab; font-size: 0.85rem;">
+    @if (IsPolishSpeaker()) {<span class="fi fi-pl flag-icon"></span>}
+    @Assignment.WorkerName
+    @if (OnRemove.HasDelegate)
+    {
+        <span class="kanban-card-remove" @onclick="OnRemove" @onclick:stopPropagation="true" title="Verwijder van taak">&times;</span>
+    }
+</div>
+
+@code {
+    [Parameter] public PlanningAssignment Assignment { get; set; } = default!;
+    [Parameter] public List<Person> AllPersons { get; set; } = [];
+    [Parameter] public string? HighlightedTaskName { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private bool IsOnHighlightedTask => HighlightedTaskName == Assignment.TaskName;
+    private bool IsOnDifferentTask => !string.IsNullOrEmpty(HighlightedTaskName) && !IsOnHighlightedTask;
+
+    private SkillLevel GetDisplaySkillLevel()
+    {
+        if (!string.IsNullOrEmpty(HighlightedTaskName) && IsOnHighlightedTask)
+            return Assignment.SkillLevel;
+
+        if (!string.IsNullOrEmpty(HighlightedTaskName))
+        {
+            var person = AllPersons.FirstOrDefault(p => p.Name == Assignment.WorkerName);
+            if (person != null && person.Skills.TryGetValue(HighlightedTaskName, out var sl))
+                return sl;
+            return SkillLevel.Cannot;
+        }
+        return Assignment.SkillLevel;
+    }
+
+    private bool IsPolishSpeaker() =>
+        AllPersons.FirstOrDefault(p => p.Name == Assignment.WorkerName)?.SpeaksPolish == true;
+
+    private string GetBadgeClass()
+    {
+        if (IsOnDifferentTask)
+            return "bg-secondary text-white";
+
+        var level = GetDisplaySkillLevel();
+        return level switch
+        {
+            SkillLevel.Expert => "bg-success text-white",
+            SkillLevel.Experienced => "bg-info text-dark",
+            SkillLevel.Beginner => "bg-warning text-dark",
+            SkillLevel.Cannot => "bg-danger text-white",
+            _ => "bg-secondary text-white"
+        };
+    }
+}

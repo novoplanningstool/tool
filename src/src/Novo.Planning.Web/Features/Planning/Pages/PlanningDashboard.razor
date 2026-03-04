@@ -1,0 +1,135 @@
+@page "/planning"
+@rendermode InteractiveServer
+@using Novo.Planning.Web.Features.Planning.Services
+@inject IPlanningService PlanningService
+@inject NavigationManager Navigation
+
+<PageTitle>Planning - NOVO</PageTitle>
+
+<h2>Planningen</h2>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="CreateNew">Nieuwe Planning</button>
+</div>
+
+@if (_plannings == null)
+{
+    <p>Laden...</p>
+}
+else if (_plannings.Count == 0)
+{
+    <p>Geen planningen gevonden. Maak een nieuwe planning aan.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Dag</th>
+                <th>Strategie</th>
+                <th>Taken</th>
+                <th>Medewerkers</th>
+                <th>Aangemaakt</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in _plannings)
+            {
+                <tr>
+                    <td>@p.Date.ToString("dd-MM-yyyy")</td>
+                    <td>@p.DayName</td>
+                    <td>@GetStrategyName(p.Strategy)</td>
+                    <td>@p.Assignments.Select(a => a.TaskName).Distinct().Count()</td>
+                    <td>@p.Assignments.Select(a => a.WorkerName).Distinct().Count()</td>
+                    <td>@p.CreatedAt.ToLocalTime().ToString("dd-MM-yyyy HH:mm")</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(p.Id)">Bewerken</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(p)">Verwijderen</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_templates != null && _templates.Count > 0)
+{
+    <h3 class="mt-4">Templates</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Naam</th>
+                <th>Strategie</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in _templates)
+            {
+                <tr>
+                    <td>@t.TemplateName</td>
+                    <td>@GetStrategyName(t.Strategy)</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => CreateFromTemplate(t.Id)">Gebruiken</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<ConfirmDialog IsVisible="_showDeleteConfirm"
+               Message="@($"Weet u zeker dat u deze planning wilt verwijderen?")"
+               OnConfirm="DeleteConfirmed"
+               OnCancel="() => _showDeleteConfirm = false" />
+
+@code {
+    private IReadOnlyList<PlanningModel>? _plannings;
+    private IReadOnlyList<PlanningModel>? _templates;
+    private PlanningModel? _planningToDelete;
+    private bool _showDeleteConfirm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _plannings = await PlanningService.GetAllPlanningsAsync();
+        _templates = await PlanningService.GetTemplatesAsync();
+    }
+
+    private void CreateNew() => Navigation.NavigateTo("/planning/nieuw");
+
+    private void Edit(string id) => Navigation.NavigateTo($"/planning/{id}");
+
+    private void CreateFromTemplate(string templateId) => Navigation.NavigateTo($"/planning/nieuw?template={templateId}");
+
+    private void ConfirmDelete(PlanningModel planning)
+    {
+        _planningToDelete = planning;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        if (_planningToDelete != null)
+        {
+            await PlanningService.DeletePlanningAsync(_planningToDelete.Id);
+            _showDeleteConfirm = false;
+            _planningToDelete = null;
+            await LoadData();
+        }
+    }
+
+    private static string GetStrategyName(OptimizationStrategy strategy) => strategy switch
+    {
+        OptimizationStrategy.MaximizeExpertise => "Expertise maximaliseren",
+        OptimizationStrategy.LearningFocused => "Leren maximaliseren",
+        OptimizationStrategy.Hybrid => "Hybride",
+        _ => strategy.ToString()
+    };
+}

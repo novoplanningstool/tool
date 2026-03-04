@@ -1,0 +1,135 @@
+@page "/taken"
+@rendermode InteractiveServer
+@using Novo.Planning.Domain.Models
+@using Novo.Planning.Web.Features.Tasks.Services
+@using Novo.Planning.Web.Components.Shared
+@inject ITaskService TaskService
+@inject NavigationManager Navigation
+
+<PageTitle>Taken</PageTitle>
+
+<h3>Taken</h3>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="AddNew">
+        <span class="bi bi-plus-circle" aria-hidden="true"></span> Nieuwe taak
+    </button>
+</div>
+
+@if (_tasks is null)
+{
+    <p><em>Laden...</em></p>
+}
+else if (_tasks.Count == 0)
+{
+    <p>Geen taken gevonden.</p>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Naam</th>
+                <th>Actief</th>
+                <th>Aantal</th>
+                <th>Bord</th>
+                <th>Min niveau 1</th>
+                <th>Min niveau 2</th>
+                <th>Min niveau 3</th>
+                <th>Rest niveau</th>
+                <th>Samenwerken</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var task in _tasks.OrderBy(t => t.SortOrder))
+            {
+                <tr @onclick="() => Edit(task.Id)" style="cursor: pointer;">
+                    <td>@task.Name</td>
+                    <td>@(task.IsActive ? "Ja" : "Nee")</td>
+                    <td>@task.HeadcountRequired</td>
+                    <td>@(task.BoardPosition == BoardPosition.Left ? "Links" : "Rechts")</td>
+                    <td>@task.MinWorkersLevel1</td>
+                    <td>@task.MinWorkersLevel2</td>
+                    <td>@task.MinWorkersLevel3</td>
+                    <td>@FormatSkillLevel(task.RestLevel)</td>
+                    <td>@(task.RequiresLanguageCollaboration ? "Ja" : "Nee")</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="() => ConfirmDelete(task)"
+                                @onclick:stopPropagation="true">
+                            Verwijderen
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<ConfirmDialog Title="Taak verwijderen"
+               Message="@_deleteMessage"
+               ConfirmText="Verwijderen"
+               IsVisible="_showDeleteDialog"
+               OnConfirm="DeleteConfirmed"
+               OnCancel="DeleteCancelled" />
+
+@code {
+    private IReadOnlyList<TaskDefinition>? _tasks;
+    private TaskDefinition? _taskToDelete;
+    private bool _showDeleteDialog;
+    private string _deleteMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTasks();
+    }
+
+    private async Task LoadTasks()
+    {
+        _tasks = await TaskService.GetAllAsync();
+    }
+
+    private void AddNew()
+    {
+        Navigation.NavigateTo("/taken/nieuw");
+    }
+
+    private void Edit(string id)
+    {
+        Navigation.NavigateTo($"/taken/{id}");
+    }
+
+    private void ConfirmDelete(TaskDefinition task)
+    {
+        _taskToDelete = task;
+        _deleteMessage = $"Weet u zeker dat u '{task.Name}' wilt verwijderen?";
+        _showDeleteDialog = true;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        if (_taskToDelete is not null)
+        {
+            await TaskService.DeleteAsync(_taskToDelete.Id);
+            _taskToDelete = null;
+            _showDeleteDialog = false;
+            await LoadTasks();
+        }
+    }
+
+    private void DeleteCancelled()
+    {
+        _taskToDelete = null;
+        _showDeleteDialog = false;
+    }
+
+    private static string FormatSkillLevel(SkillLevel level) => level switch
+    {
+        SkillLevel.Expert => "Expert",
+        SkillLevel.Experienced => "Ervaren",
+        SkillLevel.Beginner => "Beginner",
+        SkillLevel.Cannot => "Kan niet",
+        _ => level.ToString()
+    };
+}

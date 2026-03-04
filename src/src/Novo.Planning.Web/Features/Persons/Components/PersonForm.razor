@@ -1,0 +1,81 @@
+@rendermode InteractiveServer
+@using Novo.Planning.Domain.Models
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Gegevens</h5>
+
+        <div class="mb-3">
+            <label class="form-label" for="person-name">Naam</label>
+            <input id="person-name"
+                   type="text"
+                   class="form-control"
+                   @bind="Person.Name"
+                   placeholder="Voer naam in" />
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check">
+                <input id="speaks-dutch"
+                       type="checkbox"
+                       class="form-check-input"
+                       @bind="Person.SpeaksDutch" />
+                <label class="form-check-label" for="speaks-dutch">Spreekt Nederlands</label>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check">
+                <input id="speaks-polish"
+                       type="checkbox"
+                       class="form-check-input"
+                       @bind="Person.SpeaksPolish" />
+                <label class="form-check-label" for="speaks-polish">Spreekt Pools</label>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Vrije dagen</label>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var (day, name) in DutchDays)
+                {
+                    <div class="form-check">
+                        <input type="checkbox"
+                               class="form-check-input"
+                               id="@($"day-{day}")"
+                               checked="@Person.DefaultDaysOff.Contains(day)"
+                               @onchange="e => ToggleDayOff(day, (bool)(e.Value ?? false))" />
+                        <label class="form-check-label" for="@($"day-{day}")">@name</label>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Person Person { get; set; } = new();
+
+    private static readonly (DayOfWeek Day, string Name)[] DutchDays =
+    [
+        (DayOfWeek.Monday, "Maandag"),
+        (DayOfWeek.Tuesday, "Dinsdag"),
+        (DayOfWeek.Wednesday, "Woensdag"),
+        (DayOfWeek.Thursday, "Donderdag"),
+        (DayOfWeek.Friday, "Vrijdag"),
+        (DayOfWeek.Saturday, "Zaterdag"),
+        (DayOfWeek.Sunday, "Zondag"),
+    ];
+
+    private void ToggleDayOff(DayOfWeek day, bool isChecked)
+    {
+        if (isChecked)
+        {
+            Person.DefaultDaysOff.Add(day);
+        }
+        else
+        {
+            Person.DefaultDaysOff.Remove(day);
+        }
+    }
+}

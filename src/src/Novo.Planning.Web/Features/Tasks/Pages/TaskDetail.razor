@@ -1,0 +1,111 @@
+@page "/taken/nieuw"
+@page "/taken/{Id}"
+@rendermode InteractiveServer
+@using Novo.Planning.Domain.Models
+@using Novo.Planning.Web.Features.Tasks.Services
+@using Novo.Planning.Web.Features.Tasks.Components
+@inject ITaskService TaskService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_isNew ? "Nieuwe taak" : _task.Name)</PageTitle>
+
+<h3>@(_isNew ? "Nieuwe taak" : _task.Name)</h3>
+
+@if (_loading)
+{
+    <p><em>Laden...</em></p>
+}
+else if (_notFound)
+{
+    <div class="alert alert-warning">Taak niet gevonden.</div>
+    <button class="btn btn-secondary" @onclick="GoBack">Terug naar overzicht</button>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger">@_errorMessage</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="alert alert-success">@_successMessage</div>
+    }
+
+    <div class="row">
+        <div class="col-md-6">
+            <TaskForm Task="_task" />
+        </div>
+    </div>
+
+    <div class="mt-4 mb-4">
+        <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+            @(_saving ? "Opslaan..." : "Opslaan")
+        </button>
+        <button class="btn btn-secondary ms-2" @onclick="GoBack">Annuleren</button>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private TaskDefinition _task = new();
+    private bool _isNew;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _saving;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isNew = string.IsNullOrEmpty(Id) || Id == "nieuw";
+
+        if (!_isNew)
+        {
+            var existing = await TaskService.GetByIdAsync(Id!);
+            if (existing is null)
+            {
+                _notFound = true;
+            }
+            else
+            {
+                _task = existing;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        var (success, error) = await TaskService.SaveAsync(_task);
+
+        if (success)
+        {
+            if (_isNew)
+            {
+                Navigation.NavigateTo($"/taken/{_task.Id}");
+            }
+            else
+            {
+                _successMessage = "Taak opgeslagen.";
+            }
+        }
+        else
+        {
+            _errorMessage = error;
+        }
+
+        _saving = false;
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/taken");
+    }
+}

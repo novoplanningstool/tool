@@ -1,0 +1,108 @@
+@rendermode InteractiveServer
+@using Novo.Planning.Domain.Models
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Taak gegevens</h5>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-name">Naam</label>
+            <input id="task-name"
+                   type="text"
+                   class="form-control"
+                   @bind="Task.Name"
+                   placeholder="Voer taaknaam in" />
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check">
+                <input id="task-active"
+                       type="checkbox"
+                       class="form-check-input"
+                       @bind="Task.IsActive" />
+                <label class="form-check-label" for="task-active">Actief</label>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-headcount">Aantal (headcount)</label>
+            <input id="task-headcount"
+                   type="number"
+                   class="form-control"
+                   @bind="Task.HeadcountRequired"
+                   min="1" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-board">Bordpositie</label>
+            <select id="task-board"
+                    class="form-select"
+                    @bind="Task.BoardPosition">
+                <option value="@BoardPosition.Left">Links</option>
+                <option value="@BoardPosition.Right">Rechts</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-min1">Min. medewerkers niveau 1</label>
+            <input id="task-min1"
+                   type="number"
+                   class="form-control"
+                   @bind="Task.MinWorkersLevel1"
+                   min="0" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-min2">Min. medewerkers niveau 2</label>
+            <input id="task-min2"
+                   type="number"
+                   class="form-control"
+                   @bind="Task.MinWorkersLevel2"
+                   min="0" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-min3">Min. medewerkers niveau 3</label>
+            <input id="task-min3"
+                   type="number"
+                   class="form-control"
+                   @bind="Task.MinWorkersLevel3"
+                   min="0" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-restlevel">Rest niveau</label>
+            <select id="task-restlevel"
+                    class="form-select"
+                    @bind="Task.RestLevel">
+                <option value="@SkillLevel.Expert">Expert</option>
+                <option value="@SkillLevel.Experienced">Ervaren</option>
+                <option value="@SkillLevel.Beginner">Beginner</option>
+                <option value="@SkillLevel.Cannot">Kan niet</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check">
+                <input id="task-collab"
+                       type="checkbox"
+                       class="form-check-input"
+                       @bind="Task.RequiresLanguageCollaboration" />
+                <label class="form-check-label" for="task-collab">Vereist taalsamenwerking</label>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="task-sort">Sorteervolgorde</label>
+            <input id="task-sort"
+                   type="number"
+                   class="form-control"
+                   @bind="Task.SortOrder"
+                   min="0" />
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TaskDefinition Task { get; set; } = new();
+}
