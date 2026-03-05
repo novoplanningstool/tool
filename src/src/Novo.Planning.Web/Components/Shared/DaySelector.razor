@@ -1,0 +1,39 @@
+@rendermode InteractiveServer
+
+<div class="day-selector">
+    <label class="form-label">@Label</label>
+    <select class="form-select" value="@SelectedDay" @onchange="OnDayChanged">
+        @foreach (var day in Days)
+        {
+            <option value="@day.Key">@day.Value</option>
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Dag";
+    [Parameter] public DayOfWeek SelectedDay { get; set; } = DayOfWeek.Monday;
+    [Parameter] public EventCallback<DayOfWeek> SelectedDayChanged { get; set; }
+
+    private static readonly Dictionary<DayOfWeek, string> Days = new()
+    {
+        [DayOfWeek.Monday] = "Maandag",
+        [DayOfWeek.Tuesday] = "Dinsdag",
+        [DayOfWeek.Wednesday] = "Woensdag",
+        [DayOfWeek.Thursday] = "Donderdag",
+        [DayOfWeek.Friday] = "Vrijdag",
+        [DayOfWeek.Saturday] = "Zaterdag",
+        [DayOfWeek.Sunday] = "Zondag",
+    };
+
+    public static string ToDutchName(DayOfWeek day) => Days.GetValueOrDefault(day, day.ToString());
+
+    private async Task OnDayChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<DayOfWeek>(e.Value?.ToString(), out var day))
+        {
+            SelectedDay = day;
+            await SelectedDayChanged.InvokeAsync(day);
+        }
+    }
+}

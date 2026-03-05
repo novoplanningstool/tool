@@ -1,0 +1,33 @@
+@rendermode InteractiveServer
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop" @onclick="Cancel">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@Title</h5>
+                </div>
+                <div class="modal-body">
+                    <p>@Message</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Cancel">Annuleren</button>
+                    <button class="btn btn-danger" @onclick="Confirm">@ConfirmText</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "Bevestigen";
+    [Parameter] public string Message { get; set; } = "Weet u het zeker?";
+    [Parameter] public string ConfirmText { get; set; } = "Verwijderen";
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task Confirm() => await OnConfirm.InvokeAsync();
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+}

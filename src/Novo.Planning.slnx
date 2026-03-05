@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Novo.Planning.Domain/Novo.Planning.Domain.csproj" />
+    <Project Path="src/Novo.Planning.Infrastructure/Novo.Planning.Infrastructure.csproj" />
+    <Project Path="src/Novo.Planning.Solver/Novo.Planning.Solver.csproj" />
+    <Project Path="src/Novo.Planning.Web/Novo.Planning.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Novo.Planning.Domain.Tests/Novo.Planning.Domain.Tests.csproj" />
+    <Project Path="tests/Novo.Planning.Infrastructure.Tests/Novo.Planning.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Novo.Planning.Solver.Tests/Novo.Planning.Solver.Tests.csproj" />
+    <Project Path="tests/Novo.Planning.Web.Tests/Novo.Planning.Web.Tests.csproj" />
+  </Folder>
+</Solution>

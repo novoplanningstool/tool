@@ -1,0 +1,108 @@
+@if (Planning != null)
+{
+    var assignedWorkers = Planning.Assignments.Select(a => a.WorkerName).ToHashSet();
+    var unassigned = AllPersons
+        .Where(p => p.Id != "temp-worker-template" && !assignedWorkers.Contains(p.Name) && !Planning.AbsentWorkers.Contains(p.Name))
+        .ToList();
+
+    <div class="card mt-3 drop-zone" data-drop-zone="unassigned">
+        <div class="card-header py-1 d-flex justify-content-between align-items-center" style="background-color: #6c757d; color: white;">
+            <div>
+                <strong>Niet ingepland</strong>
+                <span class="badge bg-light text-dark ms-1">@unassigned.Count</span>
+            </div>
+            @if (unassigned.Count > 0 && OnMoveAllToAbsent.HasDelegate)
+            {
+                <button class="btn btn-sm text-white py-0 px-1" style="font-size: 0.75rem; opacity: 0.85; border: 1px solid rgba(255,255,255,0.5);"
+                        @onclick="OnMoveAllToAbsent" title="Allemaal naar afwezig">Iedereen afwezig</button>
+            }
+        </div>
+        <div class="card-body p-2" style="min-height: 40px;">
+            @foreach (var person in unassigned)
+            {
+                <span class="badge @GetBadgeClass(person) me-1 mb-1"
+                      draggable="true"
+                      data-drag-worker="@person.Name"
+                      data-drag-source=""
+                      style="cursor: grab; font-size: 0.85rem;">
+                    @if (person.SpeaksPolish) {<span class="fi fi-pl flag-icon"></span>}
+                    @person.Name
+                </span>
+            }
+        </div>
+    </div>
+
+    <div class="card mt-2 drop-zone" data-drop-zone="absent">
+        <div class="card-header py-1 d-flex justify-content-between align-items-center" style="background-color: #FF6103; color: white;">
+            <div>
+                <strong>Afwezig</strong>
+                <span class="badge bg-light text-dark ms-1">@Planning.AbsentWorkers.Count</span>
+            </div>
+            @if (Planning.AbsentWorkers.Count > 0 && OnMoveAllToUnplanned.HasDelegate)
+            {
+                <button class="btn btn-sm text-white py-0 px-1" style="font-size: 0.75rem; opacity: 0.85; border: 1px solid rgba(255,255,255,0.5);"
+                        @onclick="OnMoveAllToUnplanned" title="Allemaal beschikbaar (behalve vrije dagen)">Iedereen beschikbaar</button>
+            }
+        </div>
+        <div class="card-body p-2" style="min-height: 40px;">
+            @foreach (var name in Planning.AbsentWorkers)
+            {
+                var person = AllPersons.FirstOrDefault(p => p.Name == name);
+                <span class="badge @GetAbsentBadgeClass(person) me-1 mb-1"
+                      draggable="true"
+                      data-drag-worker="@name"
+                      data-drag-source="__absent__"
+                      style="cursor: grab; font-size: 0.8rem;">
+                    @if (person?.SpeaksPolish == true) {<span class="fi fi-pl flag-icon"></span>}
+                    @name
+                </span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public PlanningModel? Planning { get; set; }
+    [Parameter] public List<Person> AllPersons { get; set; } = [];
+    [Parameter] public EventCallback OnMoveAllToAbsent { get; set; }
+    [Parameter] public EventCallback OnMoveAllToUnplanned { get; set; }
+    [Parameter] public string? HighlightedTaskName { get; set; }
+
+    private SkillLevel GetSkillForTask(Person person)
+    {
+        if (!string.IsNullOrEmpty(HighlightedTaskName) &&
+            person.Skills.TryGetValue(HighlightedTaskName, out var sl))
+            return sl;
+        return SkillLevel.Cannot;
+    }
+
+    private string GetBadgeClass(Person person)
+    {
+        if (string.IsNullOrEmpty(HighlightedTaskName))
+            return "bg-secondary text-white";
+
+        return GetSkillForTask(person) switch
+        {
+            SkillLevel.Expert => "bg-success text-white",
+            SkillLevel.Experienced => "bg-info text-dark",
+            SkillLevel.Beginner => "bg-warning text-dark",
+            SkillLevel.Cannot => "bg-danger text-white",
+            _ => "bg-secondary text-white"
+        };
+    }
+
+    private string GetAbsentBadgeClass(Person? person)
+    {
+        if (string.IsNullOrEmpty(HighlightedTaskName) || person == null)
+            return "bg-light text-dark border";
+
+        return GetSkillForTask(person) switch
+        {
+            SkillLevel.Expert => "bg-success text-white",
+            SkillLevel.Experienced => "bg-info text-dark",
+            SkillLevel.Beginner => "bg-warning text-dark",
+            SkillLevel.Cannot => "bg-danger text-white",
+            _ => "bg-light text-dark border"
+        };
+    }
+}

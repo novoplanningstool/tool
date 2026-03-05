@@ -1,0 +1,35 @@
+@if (Violations.Count > 0)
+{
+    <div class="card mt-3">
+        <div class="card-header">
+            <strong>Compliance Check</strong>
+            <span class="badge @(HasErrors ? "bg-danger" : "bg-warning") ms-2">@Violations.Count</span>
+        </div>
+        <div class="card-body p-2">
+            @foreach (var violation in Violations)
+            {
+                <div class="alert @(violation.Severity == ViolationSeverity.Error ? "alert-danger" : "alert-warning") py-1 px-2 mb-1">
+                    <small>
+                        @if (!string.IsNullOrEmpty(violation.TaskName))
+                        {
+                            <strong>@violation.TaskName</strong>
+                            <text>: </text>
+                        }
+                        @if (!string.IsNullOrEmpty(violation.WorkerName))
+                        {
+                            <strong>@violation.WorkerName</strong>
+                            <text>: </text>
+                        }
+                        @violation.Message
+                    </small>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<ComplianceViolation> Violations { get; set; } = [];
+
+    private bool HasErrors => Violations.Any(v => v.Severity == ViolationSeverity.Error);
+}

@@ -1,0 +1,598 @@
+@page "/planning"
+@rendermode InteractiveServer
+@using Novo.Planning.Domain.Interfaces
+@using Novo.Planning.Infrastructure.Import
+@using Novo.Planning.Web.Features.Planning.Components
+@using Novo.Planning.Web.Features.Planning.Services
+@inject IPlanningService PlanningService
+@inject IExcelImportService ImportService
+@inject IPersonRepository PersonRepository
+@inject ITaskDefinitionRepository TaskRepository
+@inject IComplianceValidator ComplianceValidator
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Planning - NOVO</PageTitle>
+
+<h2 class="mb-2">Planning</h2>
+
+@if (_loading)
+{
+    <p>Laden...</p>
+}
+else if (_noData)
+{
+    <div class="alert alert-warning">
+        Geen data geladen. <a href="/">Upload eerst een Excel-bestand.</a>
+    </div>
+}
+else
+{
+    <div class="d-flex gap-3">
+        <!-- Settings Panel -->
+        <div style="min-width: 300px; max-width: 340px; flex-shrink: 0;">
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #59B6AD; color: white;">Instellingen</div>
+                <div class="card-body">
+                    <DaySelector Label="Dag" SelectedDay="_settings.DayOfWeek" SelectedDayChanged="OnDayChanged" />
+
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Datum</label>
+                        <input type="date" class="form-control" @bind="_dateValue" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Strategie</label>
+                        <select class="form-select" @bind="_settings.Strategy">
+                            <option value="@OptimizationStrategy.MaximizeExpertise">Iedereen doet waar hij het beste in is</option>
+                            <option value="@OptimizationStrategy.LearningFocused">Zo veel mogelijk leren</option>
+                            <option value="@OptimizationStrategy.Hybrid">Hybride (goede mensen op belangrijke taken)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Uitzendkrachten</label>
+                        <input type="number" class="form-control" min="0" @bind="_settings.TempWorkerCount" />
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Actieve taken</h6>
+                        <div>
+                            <button class="btn btn-link btn-sm p-0" @onclick="SelectAllTasks">Alles</button>
+                            <span class="text-muted mx-1">/</span>
+                            <button class="btn btn-link btn-sm p-0" @onclick="DeselectAllTasks">Geen</button>
+                        </div>
+                    </div>
+                    <input type="text" class="form-control form-control-sm mt-1 mb-1" placeholder="Zoek taak..."
+                           @bind="_taskFilter" @bind:event="oninput" />
+                    <div class="mb-3 mt-1" style="max-height: 200px; overflow-y: auto;">
+                        @foreach (var task in _allTasks.Where(t => t.Name.Contains(_taskFilter, StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name))
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       checked="@_selectedTaskIds.Contains(task.Id)"
+                                       @onchange="e => ToggleTask(task.Id, (bool)(e.Value ?? false))" />
+                                <label class="form-check-label">@task.Name (@task.HeadcountRequired)</label>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" @onclick="Generate" disabled="@(_generating || _validating)">
+                            @(_generating ? "Genereren..." : "Genereer Planning")
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="GenerateRandom" disabled="@(_generating || _validating)">
+                            Willekeurige planning
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kanban Board + Compliance -->
+        <div style="flex: 1; min-width: 0;">
+            @if (_solverResult?.Status == SolverStatus.Infeasible)
+            {
+                <div class="alert alert-danger">
+                    <strong>Planning kon niet worden gegenereerd.</strong>
+                    @foreach (var warning in _solverResult.Warnings)
+                    {
+                        <p>@warning</p>
+                    }
+                </div>
+            }
+
+            @if (_isValidationResult && _solverResult?.Status == SolverStatus.Optimal)
+            {
+                @if (_violations.Count == 0)
+                {
+                    <div class="alert alert-success">
+                        <strong>Planning is valide.</strong> Alle regels worden nageleefd.
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <strong>Planning heeft aandachtspunten.</strong> Zie compliance check hieronder.
+                    </div>
+                }
+            }
+
+            @if (_solverResult != null && _solverResult.Status != SolverStatus.Infeasible && _solverResult.Warnings.Count > 0)
+            {
+                <div class="alert alert-warning">
+                    @foreach (var warning in _solverResult.Warnings)
+                    {
+                        <p>@warning</p>
+                    }
+                </div>
+            }
+
+            @if (_errorMessage != null)
+            {
+                <div class="alert alert-danger">
+                    <strong>Er is een fout opgetreden:</strong>
+                    <p class="mb-0 mt-1">@_errorMessage</p>
+                </div>
+            }
+
+            @if (_generating || _validating)
+            {
+                <div class="d-flex align-items-center gap-2 my-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <span>@(_validating ? "Planning wordt gevalideerd..." : "Planning wordt gegenereerd...")</span>
+                </div>
+            }
+
+            @if (_planning != null)
+            {
+                <div class="mb-3 d-flex align-items-center gap-2">
+                    <button class="btn btn-info text-white" @onclick="Validate" disabled="@(_generating || _validating || !HasAssignments)">
+                        @(_validating ? "Valideren..." : "Valideer")
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ExportExcel" disabled="@(_generating || _validating || !HasAssignments)">Exporteer Excel</button>
+                    <button class="btn btn-outline-warning" @onclick="ResetBoard">Iedereen loskoppelen</button>
+                    <button class="btn btn-outline-danger" @onclick="Unload">Ander bestand laden</button>
+                </div>
+
+                <KanbanBoard Planning="_planning" AllPersons="_allPersons" AllTasks="_allTasks"
+                             SelectedTaskIds="_selectedTaskIds"
+                             DayOffWorkerNames="GetDayOffWorkerNames()"
+                             Violations="_violations"
+                             HighlightedTaskName="@_highlightedTaskName"
+                             OnHighlightChanged="OnHighlightChanged"
+                             OnAssignmentChanged="OnAssignmentChanged"
+                             OnTaskRemoved="OnTaskRemovedFromBoard"
+                             OnTaskMoved="OnTaskMoved" />
+
+                <CompliancePanel Violations="_violations" />
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private PlanningSettings _settings = new();
+    private DateTime _dateValue = DateTime.Today;
+    private List<Person> _allPersons = [];
+    private List<TaskDefinition> _allTasks = [];
+    private HashSet<string> _selectedWorkerIds = [];
+    private HashSet<string> _selectedTaskIds = [];
+    private SolverResult? _solverResult;
+    private PlanningModel? _planning;
+    private List<ComplianceViolation> _violations = [];
+    private bool _loading = true;
+    private bool _generating;
+    private bool _validating;
+    private bool _isValidationResult;
+    private string? _errorMessage;
+    private string _taskFilter = "";
+    private bool _noData;
+
+    private bool HasAssignments => _planning?.Assignments.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allPersons = (await PersonRepository.GetAllAsync()).ToList();
+        _allTasks = (await TaskRepository.GetAllAsync()).ToList();
+
+        if (_allPersons.Count == 0)
+        {
+            _noData = true;
+            _loading = false;
+            return;
+        }
+
+        // Default: select all present workers (not on day off), all active tasks
+        _settings.DayOfWeek = DateTime.Today.DayOfWeek;
+        UpdateWorkerSelection();
+        _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
+
+        // Initialize empty planning so the board renders immediately
+        _planning ??= CreateEmptyPlanning();
+
+        _loading = false;
+    }
+
+    private PlanningModel CreateEmptyPlanning()
+    {
+        return new PlanningModel
+        {
+            Date = DateOnly.FromDateTime(_dateValue),
+            DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
+            Strategy = _settings.Strategy,
+            Assignments = [],
+            AbsentWorkers = _allPersons
+                .Where(p => p.Id != "temp-worker-template" && !_selectedWorkerIds.Contains(p.Id))
+                .Select(p => p.Name)
+                .ToList(),
+        };
+    }
+
+    private void OnDayChanged(DayOfWeek day)
+    {
+        _settings.DayOfWeek = day;
+        UpdateWorkerSelection();
+        SyncAbsentWorkers();
+    }
+
+    private void UpdateWorkerSelection()
+    {
+        _selectedWorkerIds = _allPersons
+            .Where(p => p.Id != "temp-worker-template" && !p.DefaultDaysOff.Contains(_settings.DayOfWeek))
+            .Select(p => p.Id)
+            .ToHashSet();
+    }
+
+    private void SyncAbsentWorkers()
+    {
+        if (_planning == null) return;
+        _planning.AbsentWorkers = _allPersons
+            .Where(p => p.Id != "temp-worker-template" && !_selectedWorkerIds.Contains(p.Id))
+            .Select(p => p.Name)
+            .ToList();
+    }
+
+    private string? _highlightedTaskName;
+
+    private void OnHighlightChanged(string? name)
+    {
+        _highlightedTaskName = name;
+    }
+
+    private void ToggleTask(string id, bool selected)
+    {
+        if (selected)
+        {
+            _selectedTaskIds.Add(id);
+            var task = _allTasks.FirstOrDefault(t => t.Id == id);
+            _highlightedTaskName = task?.Name;
+        }
+        else
+        {
+            _selectedTaskIds.Remove(id);
+            var task = _allTasks.FirstOrDefault(t => t.Id == id);
+            if (task?.Name == _highlightedTaskName)
+                _highlightedTaskName = null;
+        }
+    }
+
+    private void SelectAllTasks() =>
+        _selectedTaskIds = _allTasks.Select(t => t.Id).ToHashSet();
+
+    private void DeselectAllTasks() => _selectedTaskIds.Clear();
+
+    private async Task Generate()
+    {
+        if (HasAssignments)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Het huidige bord wordt overschreven. Wil je doorgaan?");
+            if (!confirmed) return;
+        }
+
+        _generating = true;
+        _isValidationResult = false;
+        _errorMessage = null;
+        _solverResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
+            _settings.PresentWorkerIds = _allPersons
+                .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+                .Select(p => p.Id)
+                .ToList();
+            _settings.ActiveTaskIds = _selectedTaskIds.ToList();
+            _settings.Date = DateOnly.FromDateTime(_dateValue);
+
+            // Run solver on background thread so the UI can render the spinner
+            _solverResult = await Task.Run(() => PlanningService.GeneratePlanningAsync(_settings));
+
+            if (_solverResult.Status != SolverStatus.Infeasible)
+            {
+                _planning = new PlanningModel
+                {
+                    Date = _settings.Date,
+                    DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
+                    Strategy = _settings.Strategy,
+                    Assignments = _solverResult.Assignments,
+                    Warnings = _solverResult.Warnings,
+                    AbsentWorkers = absentNames.ToList(),
+                };
+                await PlanningService.SavePlanningAsync(_planning);
+                RunComplianceCheck();
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _generating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Validate()
+    {
+        _validating = true;
+        _isValidationResult = true;
+        _errorMessage = null;
+        _solverResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
+            _settings.PresentWorkerIds = _allPersons
+                .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+                .Select(p => p.Id)
+                .ToList();
+            _settings.ActiveTaskIds = _selectedTaskIds.ToList();
+            _settings.Date = DateOnly.FromDateTime(_dateValue);
+
+            _solverResult = await Task.Run(() => PlanningService.ValidateAssignmentsAsync(_settings, _planning!.Assignments));
+            RunComplianceCheck();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _validating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateRandom()
+    {
+        if (HasAssignments)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Het huidige bord wordt overschreven. Wil je doorgaan?");
+            if (!confirmed) return;
+        }
+
+        _isValidationResult = false;
+        _errorMessage = null;
+        _solverResult = null;
+
+        var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
+        var selectedTasks = _allTasks.Where(t => _selectedTaskIds.Contains(t.Id)).ToList();
+        var availableWorkers = _allPersons
+            .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+            .ToList();
+
+        var rng = new Random();
+        var assignments = new List<PlanningAssignment>();
+        var assigned = new HashSet<string>();
+
+        // Build per-task candidate lists with skill levels
+        var taskCandidates = new Dictionary<string, List<(Person Worker, SkillLevel Level)>>();
+        foreach (var task in selectedTasks)
+        {
+            taskCandidates[task.Name] = availableWorkers
+                .Where(w =>
+                {
+                    var level = w.Skills.GetValueOrDefault(task.Name, SkillLevel.Cannot);
+                    return level != SkillLevel.Cannot;
+                })
+                .Select(w => (Worker: w, Level: w.Skills.GetValueOrDefault(task.Name, SkillLevel.Beginner)))
+                .OrderBy(_ => rng.Next())
+                .ToList();
+        }
+
+        // Pass 1: fill required skill minimums (Level1 experts first, then Level2, Level3)
+        foreach (var task in selectedTasks)
+        {
+            var candidates = taskCandidates[task.Name];
+            var taskAssigned = new List<(Person Worker, SkillLevel Level)>();
+
+            // Fill MinWorkersLevel1 (Expert)
+            FillSlots(candidates, taskAssigned, assigned, task.MinWorkersLevel1,
+                c => c.Level == SkillLevel.Expert);
+
+            // Fill MinWorkersLevel2 (Expert or Experienced)
+            var level2Have = taskAssigned.Count(a => a.Level <= SkillLevel.Experienced);
+            FillSlots(candidates, taskAssigned, assigned, task.MinWorkersLevel2 - level2Have,
+                c => c.Level <= SkillLevel.Experienced);
+
+            // Fill MinWorkersLevel3 (Expert, Experienced or Beginner)
+            var level3Have = taskAssigned.Count(a => a.Level <= SkillLevel.Beginner);
+            FillSlots(candidates, taskAssigned, assigned, task.MinWorkersLevel3 - level3Have,
+                c => c.Level <= SkillLevel.Beginner);
+
+            // Fill remaining headcount with any eligible worker, prefer better skills
+            var remaining = task.HeadcountRequired - taskAssigned.Count;
+            if (remaining > 0)
+            {
+                var rest = candidates
+                    .Where(c => !assigned.Contains(c.Worker.Name))
+                    .OrderBy(c => (int)c.Level)
+                    .ThenBy(_ => rng.Next())
+                    .Take(remaining);
+                foreach (var c in rest)
+                {
+                    taskAssigned.Add(c);
+                    assigned.Add(c.Worker.Name);
+                }
+            }
+
+            // Language collaboration: if required, try to ensure shared language
+            if (task.RequiresLanguageCollaboration && taskAssigned.Count >= 2)
+            {
+                var hasDutch = taskAssigned.Any(a => a.Worker.SpeaksDutch);
+                var hasPolish = taskAssigned.Any(a => a.Worker.SpeaksPolish);
+                var allShareLanguage = taskAssigned.All(a => a.Worker.SpeaksDutch) ||
+                                       taskAssigned.All(a => a.Worker.SpeaksPolish);
+
+                if (!allShareLanguage)
+                {
+                    // Try to swap out the odd-language worker for one that matches
+                    var majorityDutch = taskAssigned.Count(a => a.Worker.SpeaksDutch) >=
+                                        taskAssigned.Count(a => a.Worker.SpeaksPolish);
+                    var targetLang = majorityDutch;
+
+                    for (int i = 0; i < taskAssigned.Count; i++)
+                    {
+                        var w = taskAssigned[i];
+                        var matches = targetLang ? w.Worker.SpeaksDutch : w.Worker.SpeaksPolish;
+                        if (matches) continue;
+
+                        // Find a swap candidate
+                        var swap = candidates
+                            .Where(c => !assigned.Contains(c.Worker.Name) &&
+                                        (targetLang ? c.Worker.SpeaksDutch : c.Worker.SpeaksPolish))
+                            .OrderBy(c => (int)c.Level)
+                            .FirstOrDefault();
+                        if (swap.Worker != null)
+                        {
+                            assigned.Remove(w.Worker.Name);
+                            assigned.Add(swap.Worker.Name);
+                            taskAssigned[i] = swap;
+                        }
+                    }
+                }
+            }
+
+            foreach (var (worker, level) in taskAssigned)
+            {
+                assignments.Add(new PlanningAssignment
+                {
+                    TaskName = task.Name,
+                    WorkerName = worker.Name,
+                    SkillLevel = level
+                });
+            }
+        }
+
+        _planning = new PlanningModel
+        {
+            Date = DateOnly.FromDateTime(_dateValue),
+            DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
+            Strategy = _settings.Strategy,
+            Assignments = assignments,
+            AbsentWorkers = absentNames.ToList(),
+        };
+
+        RunComplianceCheck();
+    }
+
+    private static void FillSlots(
+        List<(Person Worker, SkillLevel Level)> candidates,
+        List<(Person Worker, SkillLevel Level)> taskAssigned,
+        HashSet<string> assigned,
+        int needed,
+        Func<(Person Worker, SkillLevel Level), bool> filter)
+    {
+        if (needed <= 0) return;
+        var picks = candidates
+            .Where(c => !assigned.Contains(c.Worker.Name) && filter(c))
+            .Take(needed);
+        foreach (var pick in picks)
+        {
+            taskAssigned.Add(pick);
+            assigned.Add(pick.Worker.Name);
+        }
+    }
+
+    private HashSet<string> GetDayOffWorkerNames()
+    {
+        return _allPersons
+            .Where(p => p.Id != "temp-worker-template" && p.DefaultDaysOff.Contains(_settings.DayOfWeek))
+            .Select(p => p.Name)
+            .ToHashSet();
+    }
+
+    private async Task ResetBoard()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Weet je zeker dat je alle toewijzingen wilt verwijderen?");
+        if (!confirmed) return;
+
+        _solverResult = null;
+        _isValidationResult = false;
+        _errorMessage = null;
+        _violations = [];
+        UpdateWorkerSelection();
+        _planning = CreateEmptyPlanning();
+        RunComplianceCheck();
+    }
+
+    private async Task Unload()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Weet je zeker dat je de data wilt wissen en een ander bestand wilt laden?");
+        if (!confirmed) return;
+
+        await ImportService.UnloadAsync();
+        Navigation.NavigateTo("/");
+    }
+
+    private bool HasIssues => _violations.Count > 0 || (_solverResult?.Warnings.Count > 0);
+
+    private async Task ExportExcel()
+    {
+        if (_planning == null) return;
+
+        RunComplianceCheck();
+        StateHasChanged();
+
+        if (HasIssues)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "De planning heeft aandachtspunten. Toch exporteren?");
+            if (!confirmed) return;
+        }
+
+        await PlanningService.SavePlanningAsync(_planning);
+        await JSRuntime.InvokeVoidAsync("open", $"/api/planning/{_planning.Id}/export", "_blank");
+    }
+
+    private void OnTaskRemovedFromBoard(string taskId)
+    {
+        _selectedTaskIds.Remove(taskId);
+        RunComplianceCheck();
+        StateHasChanged();
+    }
+
+    private void OnAssignmentChanged()
+    {
+        RunComplianceCheck();
+        StateHasChanged();
+    }
+
+    private async Task OnTaskMoved(TaskDefinition task)
+    {
+        await TaskRepository.UpsertAsync(task);
+        StateHasChanged();
+    }
+
+    private void RunComplianceCheck()
+    {
+        if (_planning != null)
+        {
+            var boardTasks = _allTasks.Where(t => _selectedTaskIds.Contains(t.Id)).ToList();
+            _violations = ComplianceValidator.Validate(_planning, _allPersons, boardTasks);
+        }
+    }
+}

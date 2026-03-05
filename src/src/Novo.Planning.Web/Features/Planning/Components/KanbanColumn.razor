@@ -1,0 +1,135 @@
+@{
+    var skillCounts = GetSkillCounts();
+    var statusClass = GetStatusClass(skillCounts);
+}
+<div class="kanban-column card mb-2 @statusClass"
+     data-drop-task="@TaskName"
+     @onclick:stopPropagation="true">
+    <div class="card-header d-flex justify-content-between align-items-center py-1"
+         draggable="true"
+         data-drag-column="@TaskName"
+         style="background-color: @(IsHighlighted ? "#3d8a82" : "#59B6AD"); color: white; cursor: grab;"
+         @onclick="OnHeaderClick">
+        <strong>@TaskName</strong>
+        <div>
+            <span class="badge bg-light text-dark">@Assignments.Count</span>
+            @if (OnRemove.HasDelegate)
+            {
+                <button class="btn btn-sm text-white p-0 ms-1" style="line-height: 1; font-size: 0.9rem; opacity: 0.8;"
+                        @onclick="OnRemove" @onclick:stopPropagation="true" title="Verwijder van bord">&#215;</button>
+            }
+        </div>
+    </div>
+    @if (TaskDef != null)
+    {
+        <div class="card-body p-1 border-bottom" style="font-size: 0.75rem; background: #f8f9fa;">
+            @{
+                var experts = skillCounts.GetValueOrDefault(SkillLevel.Expert);
+                var experienced = skillCounts.GetValueOrDefault(SkillLevel.Experienced);
+                var beginners = skillCounts.GetValueOrDefault(SkillLevel.Beginner);
+                var headcountMet = Assignments.Count >= TaskDef.HeadcountRequired;
+                var hasLevelReqs = TaskDef.MinWorkersLevel1 > 0 || TaskDef.MinWorkersLevel2 > 0 || TaskDef.MinWorkersLevel3 > 0;
+            }
+            @* Headcount line *@
+            <div>
+                <span class="@(headcountMet ? "text-success fw-bold" : "text-danger fw-bold")">
+                    @Assignments.Count/@TaskDef.HeadcountRequired mensen
+                    @(headcountMet ? "✓" : $"— nog {TaskDef.HeadcountRequired - Assignments.Count} nodig")
+                </span>
+            </div>
+            @if (hasLevelReqs)
+            {
+                <div class="mt-1">
+                    @if (TaskDef.MinWorkersLevel1 > 0)
+                    {
+                        var met = experts >= TaskDef.MinWorkersLevel1;
+                        <span class="slot-badge @(met ? "slot-ok" : "slot-needed")" title="Min. @TaskDef.MinWorkersLevel1 Expert vereist">
+                            Expert: @experts/@TaskDef.MinWorkersLevel1 @(met ? "✓" : $"— nog {TaskDef.MinWorkersLevel1 - experts}")
+                        </span>
+                    }
+                    @if (TaskDef.MinWorkersLevel2 > 0)
+                    {
+                        var level2Have = experts + experienced;
+                        var met = level2Have >= TaskDef.MinWorkersLevel2;
+                        <span class="slot-badge @(met ? "slot-ok" : "slot-needed")" title="Min. @TaskDef.MinWorkersLevel2 Expert of Ervaren vereist">
+                            Ervaren+: @level2Have/@TaskDef.MinWorkersLevel2 @(met ? "✓" : $"— nog {TaskDef.MinWorkersLevel2 - level2Have}")
+                        </span>
+                    }
+                    @if (TaskDef.MinWorkersLevel3 > 0)
+                    {
+                        var level3Have = experts + experienced + beginners;
+                        var met = level3Have >= TaskDef.MinWorkersLevel3;
+                        <span class="slot-badge @(met ? "slot-ok" : "slot-needed")" title="Min. @TaskDef.MinWorkersLevel3 Expert, Ervaren of Beginner vereist">
+                            Beginner+: @level3Have/@TaskDef.MinWorkersLevel3 @(met ? "✓" : $"— nog {TaskDef.MinWorkersLevel3 - level3Have}")
+                        </span>
+                    }
+                    @{
+                        var minSlots = TaskDef.MinWorkersLevel1 + TaskDef.MinWorkersLevel2 + TaskDef.MinWorkersLevel3;
+                        var remainingSlots = TaskDef.HeadcountRequired - minSlots;
+                    }
+                    @if (remainingSlots > 0)
+                    {
+                        var totalAssigned = Assignments.Count;
+                        var filledMinSlots = Math.Min(totalAssigned, minSlots);
+                        var overigFilled = Math.Max(0, totalAssigned - filledMinSlots);
+                        var overigMet = overigFilled >= remainingSlots;
+                        <span class="slot-badge @(overigMet ? "slot-ok" : "slot-needed")" title="Overige plekken">
+                            Overig: @overigFilled/@remainingSlots @(overigMet ? "✓" : $"— nog {remainingSlots - overigFilled}")
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    }
+    <div class="card-body p-2" style="min-height: 40px;">
+        @foreach (var assignment in Assignments)
+        {
+            <KanbanCard Assignment="assignment" AllPersons="AllPersons" HighlightedTaskName="@HighlightedTaskName"
+                        OnRemove="@(() => OnWorkerRemoved.InvokeAsync(assignment.WorkerName))" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string TaskName { get; set; } = "";
+    [Parameter] public List<PlanningAssignment> Assignments { get; set; } = [];
+    [Parameter] public TaskDefinition? TaskDef { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback OnHeaderClick { get; set; }
+    [Parameter] public string? HighlightedTaskName { get; set; }
+    [Parameter] public List<Person> AllPersons { get; set; } = [];
+    [Parameter] public List<ComplianceViolation> Violations { get; set; } = [];
+    [Parameter] public EventCallback<string> OnWorkerRemoved { get; set; }
+
+    private bool IsHighlighted => HighlightedTaskName == TaskName;
+
+    private Dictionary<SkillLevel, int> GetSkillCounts()
+    {
+        return Assignments
+            .GroupBy(a => a.SkillLevel)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    private string GetStatusClass(Dictionary<SkillLevel, int> counts)
+    {
+        if (TaskDef == null) return "";
+
+        var hasErrors = Violations.Any(v => v.Severity == ViolationSeverity.Error);
+        var hasWarnings = Violations.Any(v => v.Severity == ViolationSeverity.Warning);
+
+        var headcountMet = Assignments.Count >= TaskDef.HeadcountRequired;
+
+        var experts = counts.GetValueOrDefault(SkillLevel.Expert);
+        var experienced = counts.GetValueOrDefault(SkillLevel.Experienced);
+        var beginners = counts.GetValueOrDefault(SkillLevel.Beginner);
+
+        var skillsMet = true;
+        if (TaskDef.MinWorkersLevel1 > 0 && experts < TaskDef.MinWorkersLevel1) skillsMet = false;
+        if (TaskDef.MinWorkersLevel2 > 0 && (experts + experienced) < TaskDef.MinWorkersLevel2) skillsMet = false;
+        if (TaskDef.MinWorkersLevel3 > 0 && (experts + experienced + beginners) < TaskDef.MinWorkersLevel3) skillsMet = false;
+
+        if (!headcountMet || !skillsMet || hasErrors) return "status-error";
+        if (hasWarnings) return "status-warning";
+        return "status-ok";
+    }
+}

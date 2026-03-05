@@ -1,0 +1,78 @@
+@page "/"
+@rendermode InteractiveServer
+@using Novo.Planning.Infrastructure.Import
+@inject IExcelImportService ImportService
+@inject NavigationManager Navigation
+
+<PageTitle>NOVO Planning</PageTitle>
+
+<h1>Planning Generator</h1>
+
+<p class="lead">
+    Upload het Excel-bestand met werknemers en taken om te beginnen.
+</p>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Excel importeren</h5>
+                <p class="card-text">Selecteer een <code>.xlsx</code> bestand (max 10 MB).</p>
+
+                <InputFile OnChange="OnFileSelected" accept=".xlsx" disabled="@_uploading" />
+
+                @if (_uploading)
+                {
+                    <div class="d-flex align-items-center gap-2 mt-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <span>Importeren...</span>
+                    </div>
+                }
+
+                @if (_errorMessage != null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@_errorMessage</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _uploading;
+    private string? _errorMessage;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _errorMessage = null;
+        _uploading = true;
+        StateHasChanged();
+
+        try
+        {
+            var file = e.File;
+            if (file.Size > 10 * 1024 * 1024)
+            {
+                _errorMessage = "Bestand is te groot. Maximaal 10 MB toegestaan.";
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            await ImportService.ImportFromStreamAsync(ms);
+            Navigation.NavigateTo("/planning");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Fout bij importeren: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+}
