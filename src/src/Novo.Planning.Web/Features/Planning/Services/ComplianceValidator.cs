@@ -29,6 +29,7 @@ public class ComplianceValidator : IComplianceValidator
         CheckLanguageCollaboration(violations, taskLookup, assignmentsByTask, personLookup);
         CheckWorkerOverallocation(violations, assignmentsByWorker);
         CheckSkillEligibility(violations, planning.Assignments, personLookup, taskLookup);
+        CheckUnassignedWorkers(violations, persons, planning, assignmentsByWorker);
 
         return violations;
     }
@@ -178,6 +179,36 @@ public class ComplianceValidator : IComplianceValidator
                     WorkerName = workerName
                 });
             }
+        }
+    }
+
+    /// <summary>
+    /// Checks that all present workers (not absent, not temp template) are assigned to a task.
+    /// </summary>
+    private static void CheckUnassignedWorkers(
+        List<ComplianceViolation> violations,
+        List<Person> persons,
+        PlanningModel planning,
+        Dictionary<string, List<PlanningAssignment>> assignmentsByWorker)
+    {
+        var absentNames = planning.AbsentWorkers.ToHashSet();
+
+        var unassigned = persons
+            .Where(p => p.Id != "temp-worker-template"
+                        && !absentNames.Contains(p.Name)
+                        && !assignmentsByWorker.ContainsKey(p.Name))
+            .Select(p => p.Name)
+            .ToList();
+
+        if (unassigned.Count > 0)
+        {
+            var names = string.Join(", ", unassigned);
+            var label = unassigned.Count == 1 ? "medewerker is" : "medewerkers zijn";
+            violations.Add(new ComplianceViolation
+            {
+                Severity = ViolationSeverity.Warning,
+                Message = $"{unassigned.Count} aanwezige {label} niet ingepland: {names}."
+            });
         }
     }
 

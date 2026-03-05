@@ -31,4 +31,10 @@ public class InMemoryPersonRepository : IPersonRepository
         _store.TryRemove(id, out _);
         return Task.CompletedTask;
     }
+
+    public Task ClearAsync()
+    {
+        _store.Clear();
+        return Task.CompletedTask;
+    }
 }

@@ -9,11 +9,6 @@ public class ExcelImportService : IExcelImportService
     private readonly IPersonRepository _personRepository;
     private readonly ITaskDefinitionRepository _taskDefinitionRepository;
 
-    private static readonly HashSet<string> NonTaskColumns = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Werknemers", "Aanwezig", "Nederlands", "Pools", "Vrije dagen"
-    };
-
     private static readonly Dictionary<string, DayOfWeek> DutchDayMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["maandag"] = DayOfWeek.Monday,
@@ -34,7 +29,25 @@ public class ExcelImportService : IExcelImportService
     public async Task ImportAsync(string filePath)
     {
         using var workbook = new XLWorkbook(filePath);
+        await ImportFromWorkbookAsync(workbook);
+    }
 
+    public async Task ImportFromStreamAsync(Stream stream)
+    {
+        await UnloadAsync();
+
+        using var workbook = new XLWorkbook(stream);
+        await ImportFromWorkbookAsync(workbook);
+    }
+
+    public async Task UnloadAsync()
+    {
+        await _personRepository.ClearAsync();
+        await _taskDefinitionRepository.ClearAsync();
+    }
+
+    private async Task ImportFromWorkbookAsync(XLWorkbook workbook)
+    {
         var taskDefinitions = ImportTasks(workbook.Worksheet("Taken"));
         foreach (var task in taskDefinitions)
         {

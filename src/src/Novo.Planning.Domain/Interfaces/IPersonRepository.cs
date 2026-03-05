@@ -8,4 +8,5 @@ public interface IPersonRepository
     Task<Person?> GetByIdAsync(string id);
     Task UpsertAsync(Person person);
     Task DeleteAsync(string id);
+    Task ClearAsync();
 }

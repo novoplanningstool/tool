@@ -103,26 +103,6 @@ public class PlanningService : IPlanningService
         await _planningRepository.UpsertAsync(planning);
     }
 
-    public async Task<PlanningModel?> LoadPlanningAsync(string id)
-    {
-        return await _planningRepository.GetByIdAsync(id);
-    }
-
-    public async Task<IReadOnlyList<PlanningModel>> GetAllPlanningsAsync()
-    {
-        return await _planningRepository.GetAllAsync();
-    }
-
-    public async Task<IReadOnlyList<PlanningModel>> GetTemplatesAsync()
-    {
-        return await _planningRepository.GetTemplatesAsync();
-    }
-
-    public async Task DeletePlanningAsync(string id)
-    {
-        await _planningRepository.DeleteAsync(id);
-    }
-
     public async Task<byte[]?> ExportToExcelAsync(string planningId)
     {
         var planning = await _planningRepository.GetByIdAsync(planningId);

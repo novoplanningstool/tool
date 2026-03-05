@@ -1,27 +1,30 @@
-@page "/planning/nieuw"
-@page "/planning/{Id}"
+@page "/planning"
 @rendermode InteractiveServer
+@using Novo.Planning.Domain.Interfaces
+@using Novo.Planning.Infrastructure.Import
 @using Novo.Planning.Web.Features.Planning.Components
 @using Novo.Planning.Web.Features.Planning.Services
-@using Novo.Planning.Web.Features.Persons.Services
-@using Novo.Planning.Web.Features.Tasks.Services
 @inject IPlanningService PlanningService
-@inject IPersonService PersonService
-@inject ITaskService TaskService
+@inject IExcelImportService ImportService
+@inject IPersonRepository PersonRepository
+@inject ITaskDefinitionRepository TaskRepository
 @inject IComplianceValidator ComplianceValidator
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
-<PageTitle>Planning Bewerken - NOVO</PageTitle>
+<PageTitle>Planning - NOVO</PageTitle>
 
-<div class="d-flex align-items-center gap-3 mb-2">
-    <h2 class="mb-0">@(string.IsNullOrEmpty(Id) ? "Nieuwe Planning" : "Planning Bewerken")</h2>
-    <a href="/planning" class="btn btn-sm btn-outline-secondary">Opgeslagen planningen</a>
-</div>
+<h2 class="mb-2">Planning</h2>
 
 @if (_loading)
 {
     <p>Laden...</p>
+}
+else if (_noData)
+{
+    <div class="alert alert-warning">
+        Geen data geladen. <a href="/">Upload eerst een Excel-bestand.</a>
+    </div>
 }
 else
 {
@@ -75,14 +78,11 @@ else
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button class="btn btn-primary" @onclick="Generate" disabled="@(_generating || _validating || HasAssignments)">
+                        <button class="btn btn-primary" @onclick="Generate" disabled="@(_generating || _validating)">
                             @(_generating ? "Genereren..." : "Genereer Planning")
                         </button>
-                        <button class="btn btn-outline-secondary" @onclick="GenerateRandom" disabled="@(_generating || _validating || HasAssignments)">
+                        <button class="btn btn-outline-secondary" @onclick="GenerateRandom" disabled="@(_generating || _validating)">
                             Willekeurige planning
-                        </button>
-                        <button class="btn btn-info text-white" @onclick="Validate" disabled="@(_generating || _validating || !HasAssignments)">
-                            @(_validating ? "Valideren..." : "Valideer")
                         </button>
                     </div>
                 </div>
@@ -104,9 +104,18 @@ else
 
             @if (_isValidationResult && _solverResult?.Status == SolverStatus.Optimal)
             {
-                <div class="alert alert-success">
-                    <strong>Planning is valide.</strong> Alle regels worden nageleefd.
-                </div>
+                @if (_violations.Count == 0)
+                {
+                    <div class="alert alert-success">
+                        <strong>Planning is valide.</strong> Alle regels worden nageleefd.
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <strong>Planning heeft aandachtspunten.</strong> Zie compliance check hieronder.
+                    </div>
+                }
             }
 
             @if (_solverResult != null && _solverResult.Status != SolverStatus.Infeasible && _solverResult.Warnings.Count > 0)
@@ -138,13 +147,12 @@ else
             @if (_planning != null)
             {
                 <div class="mb-3 d-flex align-items-center gap-2">
-                    <button class="btn btn-success" @onclick="Save">Opslaan</button>
-                    <button class="btn btn-outline-secondary" @onclick="ExportExcel">Exporteer Excel</button>
-                    <button class="btn btn-outline-danger" @onclick="ResetBoard">Reset</button>
-                    @if (_saveMessage != null)
-                    {
-                        <span class="text-success fw-bold">@_saveMessage</span>
-                    }
+                    <button class="btn btn-info text-white" @onclick="Validate" disabled="@(_generating || _validating || !HasAssignments)">
+                        @(_validating ? "Valideren..." : "Valideer")
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ExportExcel" disabled="@(_generating || _validating || !HasAssignments)">Exporteer Excel</button>
+                    <button class="btn btn-outline-warning" @onclick="ResetBoard">Iedereen loskoppelen</button>
+                    <button class="btn btn-outline-danger" @onclick="Unload">Ander bestand laden</button>
                 </div>
 
                 <KanbanBoard Planning="_planning" AllPersons="_allPersons" AllTasks="_allTasks"
@@ -164,8 +172,6 @@ else
 }
 
 @code {
-    [Parameter] public string? Id { get; set; }
-
     private PlanningSettings _settings = new();
     private DateTime _dateValue = DateTime.Today;
     private List<Person> _allPersons = [];
@@ -181,33 +187,26 @@ else
     private bool _isValidationResult;
     private string? _errorMessage;
     private string _taskFilter = "";
-    private string? _saveMessage;
+    private bool _noData;
 
     private bool HasAssignments => _planning?.Assignments.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
-        _allPersons = (await PersonService.GetAllAsync()).ToList();
-        _allTasks = (await TaskService.GetAllAsync()).ToList();
+        _allPersons = (await PersonRepository.GetAllAsync()).ToList();
+        _allTasks = (await TaskRepository.GetAllAsync()).ToList();
 
-        if (!string.IsNullOrEmpty(Id))
+        if (_allPersons.Count == 0)
         {
-            _planning = await PlanningService.LoadPlanningAsync(Id);
-            if (_planning != null)
-            {
-                _settings.Strategy = _planning.Strategy;
-                _settings.DayOfWeek = _planning.Date.DayOfWeek;
-                _dateValue = _planning.Date.ToDateTime(TimeOnly.MinValue);
-                RunComplianceCheck();
-            }
+            _noData = true;
+            _loading = false;
+            return;
         }
-        else
-        {
-            // Default: select all present workers (not on day off), all active tasks
-            _settings.DayOfWeek = DateTime.Today.DayOfWeek;
-            UpdateWorkerSelection();
-            _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
-        }
+
+        // Default: select all present workers (not on day off), all active tasks
+        _settings.DayOfWeek = DateTime.Today.DayOfWeek;
+        UpdateWorkerSelection();
+        _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
 
         // Initialize empty planning so the board renders immediately
         _planning ??= CreateEmptyPlanning();
@@ -285,6 +284,12 @@ else
 
     private async Task Generate()
     {
+        if (HasAssignments)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Het huidige bord wordt overschreven. Wil je doorgaan?");
+            if (!confirmed) return;
+        }
+
         _generating = true;
         _isValidationResult = false;
         _errorMessage = null;
@@ -349,6 +354,7 @@ else
             _settings.Date = DateOnly.FromDateTime(_dateValue);
 
             _solverResult = await Task.Run(() => PlanningService.ValidateAssignmentsAsync(_settings, _planning!.Assignments));
+            RunComplianceCheck();
         }
         catch (Exception ex)
         {
@@ -361,8 +367,14 @@ else
         }
     }
 
-    private void GenerateRandom()
+    private async Task GenerateRandom()
     {
+        if (HasAssignments)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Het huidige bord wordt overschreven. Wil je doorgaan?");
+            if (!confirmed) return;
+        }
+
         _isValidationResult = false;
         _errorMessage = null;
         _solverResult = null;
@@ -514,33 +526,9 @@ else
             .ToHashSet();
     }
 
-    private async Task Save()
-    {
-        if (_planning == null) return;
-        _saveMessage = null;
-        await PlanningService.SavePlanningAsync(_planning);
-        _saveMessage = "Opgeslagen!";
-
-        // Navigate to the planning URL if this is a new planning
-        if (string.IsNullOrEmpty(Id))
-        {
-            Navigation.NavigateTo($"/planning/{_planning.Id}", replace: true);
-        }
-
-        // Clear the message after 3 seconds
-        _ = ClearSaveMessageAsync();
-    }
-
-    private async Task ClearSaveMessageAsync()
-    {
-        await Task.Delay(3000);
-        _saveMessage = null;
-        await InvokeAsync(StateHasChanged);
-    }
-
     private async Task ResetBoard()
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Weet je zeker dat je de planning wilt resetten?");
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Weet je zeker dat je alle toewijzingen wilt verwijderen?");
         if (!confirmed) return;
 
         _solverResult = null;
@@ -552,9 +540,30 @@ else
         RunComplianceCheck();
     }
 
+    private async Task Unload()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Weet je zeker dat je de data wilt wissen en een ander bestand wilt laden?");
+        if (!confirmed) return;
+
+        await ImportService.UnloadAsync();
+        Navigation.NavigateTo("/");
+    }
+
+    private bool HasIssues => _violations.Count > 0 || (_solverResult?.Warnings.Count > 0);
+
     private async Task ExportExcel()
     {
         if (_planning == null) return;
+
+        RunComplianceCheck();
+        StateHasChanged();
+
+        if (HasIssues)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "De planning heeft aandachtspunten. Toch exporteren?");
+            if (!confirmed) return;
+        }
+
         await PlanningService.SavePlanningAsync(_planning);
         await JSRuntime.InvokeVoidAsync("open", $"/api/planning/{_planning.Id}/export", "_blank");
     }
@@ -574,7 +583,7 @@ else
 
     private async Task OnTaskMoved(TaskDefinition task)
     {
-        await TaskService.SaveAsync(task);
+        await TaskRepository.UpsertAsync(task);
         StateHasChanged();
     }
 

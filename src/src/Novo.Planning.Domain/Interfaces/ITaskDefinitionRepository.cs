@@ -8,4 +8,5 @@ public interface ITaskDefinitionRepository
     Task<TaskDefinition?> GetByIdAsync(string id);
     Task UpsertAsync(TaskDefinition taskDefinition);
     Task DeleteAsync(string id);
+    Task ClearAsync();
 }
