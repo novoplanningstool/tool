@@ -1,13 +1,38 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
-venv/
-.venv/
 *.egg
-.DS_Store
 .pytest_cache/
 htmlcov/
 .coverage
+venv/
+.venv/
+
+# .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+[Bb]uild[Ll]og.*
+*.nupkg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+deploy.zip
+
+# VS auto-generated solution files (slnx is the real one)
+*.sln
+
+# Data
 *.xlsx
