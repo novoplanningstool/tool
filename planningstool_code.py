@@ -27,7 +27,7 @@ from excel_export import generate_excel
 
 # --- Data Upload & Validation ---
 
-st.image("https://raw.githubusercontent.com/NovoPW/Planningstool/main/NOVO-Logo.png")
+st.image("assets/NOVO-Logo.png")
 st.write("""
          ***
 
