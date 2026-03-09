@@ -66,7 +66,7 @@ else
                     <input type="text" class="form-control form-control-sm mt-1 mb-1" placeholder="Zoek taak..."
                            @bind="_taskFilter" @bind:event="oninput" />
                     <div class="mb-3 mt-1" style="max-height: 200px; overflow-y: auto;">
-                        @foreach (var task in _allTasks.Where(t => t.Name.Contains(_taskFilter, StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name))
+                        @foreach (var task in _allTasks.Where(t => t.Name.Contains(_taskFilter, StringComparison.OrdinalIgnoreCase)))
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"

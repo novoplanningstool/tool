@@ -8,260 +8,252 @@ public class ExcelExportService : IExcelExportService
 {
     private static readonly XLColor TealColor = XLColor.FromHtml("#59B6AD");
     private static readonly XLColor OrangeColor = XLColor.FromHtml("#FF6103");
-    private static readonly XLColor LightBlueColor = XLColor.FromHtml("#d2e1e9");
-    private static readonly XLColor WhiteColor = XLColor.FromHtml("#FFFFFF");
+    private static readonly XLColor GrayColor = XLColor.FromHtml("#d2e1e9");
+    private static readonly XLColor LightOrangeColor = XLColor.FromHtml("#FCD5B4");
+
+    private const int ColTaken = 1;        // A
+    private const int ColWorkersStart = 2; // B
+    private const int ColWorkersEnd = 6;   // F
+    private const int ColBijzG = 7;        // G
+    private const int ColBijzH = 8;        // H
+    private const int ColAfwezig = 9;      // I
+    private const int ColZ = 26;
 
     private readonly ITaskDefinitionRepository _taskRepository;
+    private readonly IWebHostEnvironment _environment;
 
-    public ExcelExportService(ITaskDefinitionRepository taskRepository)
+    public ExcelExportService(ITaskDefinitionRepository taskRepository, IWebHostEnvironment environment)
     {
         _taskRepository = taskRepository;
+        _environment = environment;
     }
 
     public byte[] Export(PlanningModel planning)
     {
-        // Load task definitions to determine board positions
         var tasks = _taskRepository.GetAllAsync().GetAwaiter().GetResult();
-        var taskBoardPositions = tasks.ToDictionary(t => t.Name, t => t.BoardPosition);
+
+        var assignmentsByTask = planning.Assignments
+            .Where(a => !string.IsNullOrEmpty(a.TaskName))
+            .GroupBy(a => a.TaskName)
+            .ToDictionary(g => g.Key, g => g.Select(a => a.WorkerName).ToList());
+
+        var leftTasks = tasks
+            .Where(t => t.BoardPosition == BoardPosition.Left && assignmentsByTask.ContainsKey(t.Name))
+            .OrderBy(t => t.SortOrder)
+            .ToList();
+
+        var rightTasks = tasks
+            .Where(t => t.BoardPosition == BoardPosition.Right && assignmentsByTask.ContainsKey(t.Name))
+            .OrderBy(t => t.SortOrder)
+            .ToList();
 
         using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add(planning.DayName);
 
-        var sheetName = string.IsNullOrWhiteSpace(planning.TemplateName)
-            ? planning.Date.ToString("yyyy-MM-dd")
-            : planning.TemplateName;
+        // ============================================================
+        // 0. White borderless canvas — rows 1-50, columns A-Z
+        // ============================================================
+        var canvas = ws.Range(1, 1, 50, ColZ);
+        canvas.Style.Fill.BackgroundColor = XLColor.White;
+        canvas.Style.Border.TopBorder = XLBorderStyleValues.None;
+        canvas.Style.Border.BottomBorder = XLBorderStyleValues.None;
+        canvas.Style.Border.LeftBorder = XLBorderStyleValues.None;
+        canvas.Style.Border.RightBorder = XLBorderStyleValues.None;
+        ws.ShowGridLines = false;
 
-        var worksheet = workbook.Worksheets.Add(sheetName);
-
-        var currentRow = 1;
-
-        // Title row with NOVO branding
-        currentRow = WriteTitle(worksheet, currentRow, planning);
-
-        // Strategy info
-        currentRow = WriteStrategyInfo(worksheet, currentRow, planning);
-
-        // Blank separator row
-        currentRow++;
-
-        // Left board section (BoardPosition.Left)
-        var leftAssignments = planning.Assignments
-            .Where(a => !string.IsNullOrEmpty(a.TaskName))
-            .GroupBy(a => a.TaskName)
-            .Where(g => GetBoardPosition(g.Key, taskBoardPositions) == BoardPosition.Left)
-            .OrderBy(g => g.Key)
-            .ToList();
-
-        if (leftAssignments.Count > 0)
+        // ============================================================
+        // 1. Logo — floating, 5 rows high, not attached to a cell
+        // ============================================================
+        var logoPath = Path.Combine(_environment.WebRootPath, "NOVO-Logo.png");
+        if (File.Exists(logoPath))
         {
-            currentRow = WriteBoardSection(worksheet, currentRow, "Links", leftAssignments);
-            currentRow++;
+            var picture = ws.AddPicture(logoPath);
+            picture.MoveTo(ws.Cell(1, 1), 0, 0);
+            // 4" × 1.03" at 96 DPI
+            picture.WithSize((int)(4.0 * 96), (int)(1.03 * 96));
         }
 
-        // Right board section (BoardPosition.Right)
-        var rightAssignments = planning.Assignments
-            .Where(a => !string.IsNullOrEmpty(a.TaskName))
-            .GroupBy(a => a.TaskName)
-            .Where(g => GetBoardPosition(g.Key, taskBoardPositions) == BoardPosition.Right)
-            .OrderBy(g => g.Key)
-            .ToList();
+        // ============================================================
+        // 2. Day name — rows 3-4 merged, columns D-E
+        // ============================================================
+        var dayRange = ws.Range(3, 4, 4, 5); // D3:E4
+        dayRange.Merge();
+        ws.Cell(3, 4).Value = planning.DayName;
+        ws.Cell(3, 4).Style.Font.FontSize = 28;
+        ws.Cell(3, 4).Style.Font.Bold = true;
+        dayRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        dayRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-        if (rightAssignments.Count > 0)
+        // ============================================================
+        // 3. Row 6 — headers: black bold text on colored backgrounds
+        // ============================================================
+        // Taken
+        ws.Cell(6, ColTaken).Value = "Taken";
+        ws.Cell(6, ColTaken).Style.Font.Bold = true;
+        ws.Cell(6, ColTaken).Style.Font.FontColor = XLColor.Black;
+        ws.Cell(6, ColTaken).Style.Fill.BackgroundColor = TealColor;
+        ws.Cell(6, ColTaken).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        OuterBorder(ws.Range(6, ColTaken, 6, ColTaken));
+
+        // Werknemers (merged B-F)
+        var werkRange = ws.Range(6, ColWorkersStart, 6, ColWorkersEnd);
+        werkRange.Merge();
+        ws.Cell(6, ColWorkersStart).Value = "Werknemers";
+        ws.Cell(6, ColWorkersStart).Style.Font.Bold = true;
+        ws.Cell(6, ColWorkersStart).Style.Font.FontColor = XLColor.Black;
+        ws.Cell(6, ColWorkersStart).Style.Fill.BackgroundColor = TealColor;
+        werkRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        OuterBorder(werkRange);
+
+        // Bijzonderheden (merged G-H)
+        var bijzHdrRange = ws.Range(6, ColBijzG, 6, ColBijzH);
+        bijzHdrRange.Merge();
+        ws.Cell(6, ColBijzG).Value = "Bijzonderheden";
+        ws.Cell(6, ColBijzG).Style.Font.Bold = true;
+        ws.Cell(6, ColBijzG).Style.Font.FontColor = XLColor.Black;
+        ws.Cell(6, ColBijzG).Style.Fill.BackgroundColor = TealColor;
+        bijzHdrRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        OuterBorder(bijzHdrRange);
+
+        // Afwezigen
+        ws.Cell(6, ColAfwezig).Value = "Afwezigen";
+        ws.Cell(6, ColAfwezig).Style.Font.Bold = true;
+        ws.Cell(6, ColAfwezig).Style.Font.FontColor = XLColor.Black;
+        ws.Cell(6, ColAfwezig).Style.Fill.BackgroundColor = OrangeColor;
+        ws.Cell(6, ColAfwezig).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        OuterBorder(ws.Range(6, ColAfwezig, 6, ColAfwezig));
+
+        // ============================================================
+        // Build data: left tasks, separator, right tasks
+        // ============================================================
+        var dataEntries = new List<(string? TaskName, List<string> Workers, bool IsSeparator)>();
+
+        foreach (var t in leftTasks)
+            dataEntries.Add((t.Name, assignmentsByTask.GetValueOrDefault(t.Name, []), false));
+
+        if (leftTasks.Count > 0 && rightTasks.Count > 0)
+            dataEntries.Add((null, [], true)); // separator
+
+        foreach (var t in rightTasks)
+            dataEntries.Add((t.Name, assignmentsByTask.GetValueOrDefault(t.Name, []), false));
+
+        // Total rows = enough for tasks and all absent workers
+        var totalRows = Math.Max(dataEntries.Count, planning.AbsentWorkers.Count);
+
+        // ============================================================
+        // 6+7. Data rows — alternating white/gray at ROW level
+        //       Cells after I to Z — white
+        // ============================================================
+        var dataStartRow = 7;
+        var absentIdx = 0;
+        var colorIndex = 0; // for alternating, resets across separator
+
+        for (int i = 0; i < totalRows; i++)
         {
-            currentRow = WriteBoardSection(worksheet, currentRow, "Rechts", rightAssignments);
-            currentRow++;
+            var r = dataStartRow + i;
+            var hasEntry = i < dataEntries.Count;
+            var isSep = hasEntry && dataEntries[i].IsSeparator;
+
+            if (isSep)
+            {
+                // Teal separator row across A-H — solid strip, no internal dividers
+                var sepRange = ws.Range(r, ColTaken, r, ColBijzH);
+                sepRange.Style.Fill.BackgroundColor = TealColor;
+                sepRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                // Afwezigen on separator
+                if (absentIdx < planning.AbsentWorkers.Count)
+                    ws.Cell(r, ColAfwezig).Value = planning.AbsentWorkers[absentIdx++];
+                colorIndex = 0; // reset alternating for right section
+                continue;
+            }
+
+            // Alternating row color
+            var rowBg = colorIndex % 2 == 0 ? XLColor.White : GrayColor;
+            colorIndex++;
+
+            var taskName = hasEntry ? dataEntries[i].TaskName : null;
+            var workers = hasEntry ? dataEntries[i].Workers : [];
+
+            // Fill row A-H with alternating color (column I handled separately)
+            for (int c = ColTaken; c <= ColBijzH; c++)
+                ws.Cell(r, c).Style.Fill.BackgroundColor = rowBg;
+
+            // Col A: Taken
+            if (taskName != null)
+            {
+                ws.Cell(r, ColTaken).Value = taskName;
+                ws.Cell(r, ColTaken).Style.Font.Bold = true;
+                ws.Cell(r, ColTaken).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            }
+            OuterBorder(ws.Range(r, ColTaken, r, ColTaken));
+
+            // Cols B-F: Werknemers — outside border only, no internal dividers
+            for (int w = 0; w < workers.Count && w < ColWorkersEnd - ColWorkersStart + 1; w++)
+                ws.Cell(r, ColWorkersStart + w).Value = workers[w];
+            ws.Range(r, ColWorkersStart, r, ColWorkersEnd).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            // Cols G-H: Bijzonderheden — individual cell borders (divider between G and H)
+            OuterBorder(ws.Range(r, ColBijzG, r, ColBijzG));
+            OuterBorder(ws.Range(r, ColBijzH, r, ColBijzH));
+
+            // Col I: Afwezigen
+            if (absentIdx < planning.AbsentWorkers.Count)
+                ws.Cell(r, ColAfwezig).Value = planning.AbsentWorkers[absentIdx++];
         }
 
-        // Absent workers section
-        if (planning.AbsentWorkers.Count > 0)
-        {
-            currentRow = WriteAbsentWorkers(worksheet, currentRow, planning.AbsentWorkers);
-            currentRow++;
-        }
+        var lastDataRow = dataStartRow + totalRows - 1;
 
-        // Warnings section
-        if (planning.Warnings.Count > 0)
-        {
-            currentRow = WriteWarnings(worksheet, currentRow, planning.Warnings);
-        }
+        // ============================================================
+        // 8. Afwezigen column — light orange fill, no internal borders
+        // ============================================================
+        var afwezigDataRange = ws.Range(dataStartRow, ColAfwezig, lastDataRow, ColAfwezig);
+        afwezigDataRange.Style.Fill.BackgroundColor = LightOrangeColor;
+        // Outside border around entire Afwezigen section (header + data)
+        ws.Range(6, ColAfwezig, lastDataRow, ColAfwezig).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        // Header bottom border separates header from data
+        OuterBorder(ws.Range(6, ColAfwezig, 6, ColAfwezig));
 
-        // Auto-fit columns
-        worksheet.Columns().AdjustToContents();
+        // ============================================================
+        // 9. Border line surrounding the entire "taken part" (table)
+        // ============================================================
+        ws.Range(6, ColTaken, lastDataRow, ColAfwezig).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+        // ============================================================
+        // 9. Opmerkingen — bordered box, 5 rows, white, no internal borders
+        // ============================================================
+        var opLabel = lastDataRow + 2; // skip one white row
+        ws.Cell(opLabel, ColTaken).Value = "Opmerkingen:";
+        ws.Cell(opLabel, ColTaken).Style.Font.Bold = true;
+
+        var noteStart = opLabel + 1;
+        var noteEnd = noteStart + 4; // 5 rows
+        var noteRange = ws.Range(noteStart, ColTaken, noteEnd, ColBijzH);
+        noteRange.Style.Fill.BackgroundColor = XLColor.White;
+        noteRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+        // ============================================================
+        // Column widths
+        // ============================================================
+        ws.Column(ColTaken).Width = 25;
+        for (int c = ColWorkersStart; c <= ColWorkersEnd; c++)
+            ws.Column(c).Width = 22;
+        ws.Column(ColBijzG).Width = 15;
+        ws.Column(ColBijzH).Width = 28;
+        ws.Column(ColAfwezig).Width = 25;
+
+        ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
+        ws.PageSetup.FitToPages(1, 1);
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
     }
 
-    private static BoardPosition GetBoardPosition(
-        string taskName,
-        Dictionary<string, BoardPosition> taskBoardPositions)
+    private static void OuterBorder(IXLRange range)
     {
-        return taskBoardPositions.TryGetValue(taskName, out var position)
-            ? position
-            : BoardPosition.Left; // default to left if task definition not found
-    }
-
-    private static int WriteTitle(IXLWorksheet worksheet, int row, PlanningModel planning)
-    {
-        var titleText = planning.IsTemplate
-            ? $"NOVO Planning - {planning.TemplateName}"
-            : $"NOVO Planning - {planning.DayName} {planning.Date:dd-MM-yyyy}";
-
-        var cell = worksheet.Cell(row, 1);
-        cell.Value = titleText;
-        cell.Style.Font.Bold = true;
-        cell.Style.Font.FontSize = 16;
-        cell.Style.Font.FontColor = XLColor.White;
-
-        var titleRange = worksheet.Range(row, 1, row, 4);
-        titleRange.Merge();
-        titleRange.Style.Fill.BackgroundColor = TealColor;
-        titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-
-        return row + 1;
-    }
-
-    private static int WriteStrategyInfo(IXLWorksheet worksheet, int row, PlanningModel planning)
-    {
-        var strategyText = planning.Strategy switch
-        {
-            OptimizationStrategy.MaximizeExpertise => "Maximaliseer Expertise",
-            OptimizationStrategy.LearningFocused => "Leergericht",
-            OptimizationStrategy.Hybrid => "Hybride",
-            _ => planning.Strategy.ToString()
-        };
-
-        var cell = worksheet.Cell(row, 1);
-        cell.Value = $"Strategie: {strategyText}";
-        cell.Style.Font.Italic = true;
-        cell.Style.Font.FontColor = XLColor.FromHtml("#666666");
-
-        return row + 1;
-    }
-
-    private static int WriteBoardSection(
-        IXLWorksheet worksheet,
-        int row,
-        string sectionTitle,
-        List<IGrouping<string, PlanningAssignment>> taskGroups)
-    {
-        // Section header
-        var headerCell = worksheet.Cell(row, 1);
-        headerCell.Value = sectionTitle;
-        headerCell.Style.Font.Bold = true;
-        headerCell.Style.Font.FontSize = 13;
-        headerCell.Style.Font.FontColor = XLColor.White;
-
-        var headerRange = worksheet.Range(row, 1, row, 4);
-        headerRange.Merge();
-        headerRange.Style.Fill.BackgroundColor = OrangeColor;
-
-        row++;
-
-        // Column headers
-        var colHeaderRow = worksheet.Range(row, 1, row, 3);
-        worksheet.Cell(row, 1).Value = "Taak";
-        worksheet.Cell(row, 2).Value = "Medewerker";
-        worksheet.Cell(row, 3).Value = "Niveau";
-
-        colHeaderRow.Style.Font.Bold = true;
-        colHeaderRow.Style.Fill.BackgroundColor = TealColor;
-        colHeaderRow.Style.Font.FontColor = XLColor.White;
-
-        row++;
-
-        // Data rows with alternating colors
-        var rowIndex = 0;
-        foreach (var taskGroup in taskGroups)
-        {
-            var isFirstInGroup = true;
-            foreach (var assignment in taskGroup.OrderBy(a => a.SkillLevel))
-            {
-                var bgColor = rowIndex % 2 == 0 ? WhiteColor : LightBlueColor;
-
-                worksheet.Cell(row, 1).Value = isFirstInGroup ? assignment.TaskName : string.Empty;
-                worksheet.Cell(row, 2).Value = assignment.WorkerName;
-                worksheet.Cell(row, 3).Value = FormatSkillLevel(assignment.SkillLevel);
-
-                var dataRange = worksheet.Range(row, 1, row, 3);
-                dataRange.Style.Fill.BackgroundColor = bgColor;
-
-                isFirstInGroup = false;
-                row++;
-                rowIndex++;
-            }
-        }
-
-        return row;
-    }
-
-    private static int WriteAbsentWorkers(IXLWorksheet worksheet, int row, List<string> absentWorkers)
-    {
-        var headerCell = worksheet.Cell(row, 1);
-        headerCell.Value = "Afwezige medewerkers";
-        headerCell.Style.Font.Bold = true;
-        headerCell.Style.Font.FontSize = 13;
-        headerCell.Style.Font.FontColor = XLColor.White;
-
-        var headerRange = worksheet.Range(row, 1, row, 4);
-        headerRange.Merge();
-        headerRange.Style.Fill.BackgroundColor = OrangeColor;
-
-        row++;
-
-        for (int i = 0; i < absentWorkers.Count; i++)
-        {
-            var bgColor = i % 2 == 0 ? WhiteColor : LightBlueColor;
-            var cell = worksheet.Cell(row, 1);
-            cell.Value = absentWorkers[i];
-
-            var dataRange = worksheet.Range(row, 1, row, 3);
-            dataRange.Style.Fill.BackgroundColor = bgColor;
-
-            row++;
-        }
-
-        return row;
-    }
-
-    private static int WriteWarnings(IXLWorksheet worksheet, int row, List<string> warnings)
-    {
-        var headerCell = worksheet.Cell(row, 1);
-        headerCell.Value = "Waarschuwingen";
-        headerCell.Style.Font.Bold = true;
-        headerCell.Style.Font.FontSize = 13;
-        headerCell.Style.Font.FontColor = XLColor.White;
-
-        var headerRange = worksheet.Range(row, 1, row, 4);
-        headerRange.Merge();
-        headerRange.Style.Fill.BackgroundColor = OrangeColor;
-
-        row++;
-
-        foreach (var warning in warnings)
-        {
-            var cell = worksheet.Cell(row, 1);
-            cell.Value = warning;
-            cell.Style.Font.FontColor = XLColor.Red;
-
-            var warningRange = worksheet.Range(row, 1, row, 4);
-            warningRange.Merge();
-
-            row++;
-        }
-
-        return row;
-    }
-
-    private static string FormatSkillLevel(SkillLevel level)
-    {
-        return level switch
-        {
-            SkillLevel.Expert => "1 - Expert",
-            SkillLevel.Experienced => "2 - Experienced",
-            SkillLevel.Beginner => "3 - Beginner",
-            SkillLevel.Cannot => "4 - Cannot",
-            _ => level.ToString()
-        };
+        range.Style.Border.TopBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.LeftBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.RightBorder = XLBorderStyleValues.Thin;
     }
 }
