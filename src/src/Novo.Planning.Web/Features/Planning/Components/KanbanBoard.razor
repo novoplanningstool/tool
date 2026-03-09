@@ -131,7 +131,8 @@
             <UnassignedPool Planning="Planning" AllPersons="AllPersons"
                             OnMoveAllToAbsent="MoveAllToAbsent"
                             OnMoveAllToUnplanned="MoveAllToUnplanned"
-                            HighlightedTaskName="@HighlightedTaskName" />
+                            HighlightedTaskName="@HighlightedTaskName"
+                            OnWorkerDoubleClick="AssignWorkerToHighlightedTask" />
         </div>
     }
 </div>
@@ -433,5 +434,31 @@
         {
             await AddCustomTask();
         }
+    }
+
+    private async Task AssignWorkerToHighlightedTask(string workerName)
+    {
+        if (Planning == null || string.IsNullOrEmpty(HighlightedTaskName)) return;
+
+        var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
+        if (person == null) return;
+
+        var isCustomTask = Planning.CustomTasks.Any(ct => ct.TaskName == HighlightedTaskName);
+        var isZeelandia = HighlightedTaskName == "Laden/lossen Zeelandia";
+        var skillLevel = (isCustomTask || isZeelandia) ? SkillLevel.Beginner : SkillLevel.Cannot;
+        if (person.Skills.TryGetValue(HighlightedTaskName, out var sl))
+            skillLevel = sl;
+
+        if (skillLevel == SkillLevel.Cannot) return;
+
+        Planning.Assignments.Add(new PlanningAssignment
+        {
+            TaskName = HighlightedTaskName,
+            WorkerName = workerName,
+            SkillLevel = skillLevel
+        });
+
+        await OnAssignmentChanged.InvokeAsync();
+        StateHasChanged();
     }
 }

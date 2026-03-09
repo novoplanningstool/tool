@@ -24,6 +24,8 @@
                       draggable="true"
                       data-drag-worker="@person.Name"
                       data-drag-source=""
+                      @ondblclick="() => OnWorkerDoubleClick.InvokeAsync(person.Name)"
+                      @ondblclick:stopPropagation="true"
                       style="cursor: grab; font-size: 0.85rem;">
                     @if (person.SpeaksPolish) {<span class="fi fi-pl flag-icon"></span>}
                     @person.Name
@@ -67,6 +69,7 @@
     [Parameter] public EventCallback OnMoveAllToAbsent { get; set; }
     [Parameter] public EventCallback OnMoveAllToUnplanned { get; set; }
     [Parameter] public string? HighlightedTaskName { get; set; }
+    [Parameter] public EventCallback<string> OnWorkerDoubleClick { get; set; }
 
     private SkillLevel GetSkillForTask(Person person)
     {
