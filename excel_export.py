@@ -1,12 +1,13 @@
 """Excel export with xlsxwriter formatting and NOVO branding."""
 
 from io import BytesIO
-from urllib.request import urlopen
+from pathlib import Path
 
 import pandas as pd
 
-DEFAULT_LOGO_URL = 'https://github.com/NovoPW/Planningstool/blob/main/NOVO-Logo.png?raw=true'
-DEFAULT_FRIDAY_IMAGE_URL = 'https://github.com/NovoPW/Planningstool/blob/main/download.png?raw=true'
+_ASSETS_DIR = Path(__file__).parent / 'assets'
+DEFAULT_LOGO_PATH = _ASSETS_DIR / 'NOVO-Logo.png'
+DEFAULT_FRIDAY_IMAGE_PATH = _ASSETS_DIR / 'download.png'
 
 
 def num_to_letter(i):
@@ -29,7 +30,7 @@ def color_line_by_line(worksheet, first_row, last_row, first_col, last_col, f1, 
 
 
 def generate_excel(left_board_df, right_board_df, full_planning_df, afwezig, dag,
-                   logo_url=DEFAULT_LOGO_URL, friday_image_url=DEFAULT_FRIDAY_IMAGE_URL):
+                   logo_path=DEFAULT_LOGO_PATH, friday_image_path=DEFAULT_FRIDAY_IMAGE_PATH):
     """Generate a formatted Excel file and return its bytes.
 
     Parameters
@@ -39,8 +40,8 @@ def generate_excel(left_board_df, right_board_df, full_planning_df, afwezig, dag
     full_planning_df : pd.DataFrame - combined planning used for column sizing
     afwezig : pd.DataFrame - absent workers
     dag : str - day name (Dutch)
-    logo_url : str or None - URL for NOVO logo; None skips the image
-    friday_image_url : str or None - URL for Friday image; None skips the image
+    logo_path : Path or None - path to NOVO logo; None skips the image
+    friday_image_path : Path or None - path to Friday image; None skips the image
     """
     df = full_planning_df
     output = BytesIO()
@@ -128,14 +129,12 @@ def generate_excel(left_board_df, right_board_df, full_planning_df, afwezig, dag
     })
 
     # novo logo
-    if logo_url is not None:
-        image_data = BytesIO(urlopen(logo_url).read())
-        worksheet.insert_image(0, 0, logo_url, {'image_data': image_data, 'x_scale': 0.3, 'y_scale': 0.3})
+    if logo_path is not None and Path(logo_path).exists():
+        worksheet.insert_image(0, 0, str(logo_path), {'x_scale': 0.3, 'y_scale': 0.3})
 
     bold_format = workbook.add_format({'bold': 1, 'align': 'center'})
-    if dag == 'vrijdag' and friday_image_url is not None:
-        image_data = BytesIO(urlopen(friday_image_url).read())
-        worksheet.insert_image(0, 3, friday_image_url, {'image_data': image_data, 'x_scale': 0.5, 'y_scale': 0.5})
+    if dag == 'vrijdag' and friday_image_path is not None and Path(friday_image_path).exists():
+        worksheet.insert_image(0, 3, str(friday_image_path), {'x_scale': 0.5, 'y_scale': 0.5})
         worksheet.write(4, 3, "Frikandellen-Vrijdag", bold_format)
     else:
         big_bold_format = workbook.add_format({'bold': 1, 'font_size': 25})

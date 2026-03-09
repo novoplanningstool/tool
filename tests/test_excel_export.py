@@ -49,13 +49,13 @@ class TestGenerateExcel:
     def test_returns_bytes(self, excel_inputs):
         left, right, full, afwezig = excel_inputs
         result = generate_excel(left, right, full, afwezig, "maandag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         assert isinstance(result, bytes)
 
     def test_output_is_valid_xlsx(self, excel_inputs):
         left, right, full, afwezig = excel_inputs
         result = generate_excel(left, right, full, afwezig, "maandag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         wb = openpyxl.load_workbook(BytesIO(result))
         assert wb is not None
         wb.close()
@@ -63,7 +63,7 @@ class TestGenerateExcel:
     def test_planning_sheet_exists(self, excel_inputs):
         left, right, full, afwezig = excel_inputs
         result = generate_excel(left, right, full, afwezig, "maandag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         wb = openpyxl.load_workbook(BytesIO(result))
         assert "Planning" in wb.sheetnames
         wb.close()
@@ -71,7 +71,7 @@ class TestGenerateExcel:
     def test_task_names_in_output(self, excel_inputs):
         left, right, full, afwezig = excel_inputs
         result = generate_excel(left, right, full, afwezig, "maandag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         wb = openpyxl.load_workbook(BytesIO(result))
         ws = wb["Planning"]
         all_values = [cell.value for row in ws.iter_rows() for cell in row if cell.value]
@@ -81,13 +81,13 @@ class TestGenerateExcel:
     def test_friday_variant(self, excel_inputs):
         left, right, full, afwezig = excel_inputs
         result = generate_excel(left, right, full, afwezig, "vrijdag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         assert isinstance(result, bytes)
 
     def test_absent_workers_in_output(self, excel_inputs):
         left, right, full, afwezig = excel_inputs
         result = generate_excel(left, right, full, afwezig, "maandag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         wb = openpyxl.load_workbook(BytesIO(result))
         ws = wb["Planning"]
         all_values = [cell.value for row in ws.iter_rows() for cell in row if cell.value]
@@ -98,5 +98,5 @@ class TestGenerateExcel:
         left, right, full, _ = excel_inputs
         afwezig = pd.DataFrame({0: []})
         result = generate_excel(left, right, full, afwezig, "maandag",
-                                logo_url=None, friday_image_url=None)
+                                logo_path=None, friday_image_path=None)
         assert isinstance(result, bytes)
