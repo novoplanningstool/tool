@@ -55,6 +55,12 @@ else
                         <input type="number" class="form-control" min="0" @bind="_settings.TempWorkerCount" />
                     </div>
 
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" checked="@_zeelandiaEnabled"
+                               @onchange="OnZeelandiaToggled" />
+                        <label class="form-check-label">Laden/lossen Zeelandia</label>
+                    </div>
+
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">Actieve taken</h6>
                         <div>
@@ -66,7 +72,8 @@ else
                     <input type="text" class="form-control form-control-sm mt-1 mb-1" placeholder="Zoek taak..."
                            @bind="_taskFilter" @bind:event="oninput" />
                     <div class="mb-3 mt-1" style="max-height: 200px; overflow-y: auto;">
-                        @foreach (var task in _allTasks.Where(t => t.Name.Contains(_taskFilter, StringComparison.OrdinalIgnoreCase)))
+                        @foreach (var task in _allTasks.Where(t => t.Name.Contains(_taskFilter, StringComparison.OrdinalIgnoreCase)
+                            && t.Name != ZeelandiaTaskName))
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
@@ -87,6 +94,7 @@ else
                     </div>
                 </div>
             </div>
+
         </div>
 
         <!-- Kanban Board + Compliance -->
@@ -172,6 +180,8 @@ else
 }
 
 @code {
+    private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
+
     private PlanningSettings _settings = new();
     private DateTime _dateValue = DateTime.Today;
     private List<Person> _allPersons = [];
@@ -188,6 +198,10 @@ else
     private string? _errorMessage;
     private string _taskFilter = "";
     private bool _noData;
+
+    // Zeelandia special task
+    private TaskDefinition? _zeelandiaTask;
+    private bool _zeelandiaEnabled;
 
     private bool HasAssignments => _planning?.Assignments.Count > 0;
 
@@ -207,6 +221,26 @@ else
         _settings.DayOfWeek = DateTime.Today.DayOfWeek;
         UpdateWorkerSelection();
         _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
+
+        // Detect or create Zeelandia task
+        _zeelandiaTask = _allTasks.FirstOrDefault(t => t.Name == ZeelandiaTaskName);
+        if (_zeelandiaTask == null)
+        {
+            _zeelandiaTask = new TaskDefinition
+            {
+                Name = ZeelandiaTaskName,
+                IsActive = false,
+                HeadcountRequired = 2,
+                BoardPosition = BoardPosition.Left,
+                SortOrder = 0 // first on the left board
+            };
+            await TaskRepository.UpsertAsync(_zeelandiaTask);
+            _allTasks.Insert(0, _zeelandiaTask);
+        }
+        // Everyone can do Zeelandia — set all persons to Expert
+        foreach (var person in _allPersons)
+            person.Skills[ZeelandiaTaskName] = SkillLevel.Expert;
+        // Zeelandia is disabled by default; user toggles it on when needed
 
         // Initialize empty planning so the board renders immediately
         _planning ??= CreateEmptyPlanning();
@@ -260,6 +294,47 @@ else
         _highlightedTaskName = name;
     }
 
+    private void OnZeelandiaToggled(ChangeEventArgs e)
+    {
+        _zeelandiaEnabled = (bool)(e.Value ?? false);
+        if (_zeelandiaEnabled && _zeelandiaTask != null)
+            _selectedTaskIds.Add(_zeelandiaTask.Id);
+        else if (!_zeelandiaEnabled && _zeelandiaTask != null)
+        {
+            _selectedTaskIds.Remove(_zeelandiaTask.Id);
+            // Remove any Zeelandia assignments from the board
+            if (_planning != null)
+                _planning.Assignments = _planning.Assignments
+                    .Where(a => a.TaskName != ZeelandiaTaskName).ToList();
+        }
+    }
+
+    private List<PlanningAssignment> GetZeelandiaAssignments()
+    {
+        if (!_zeelandiaEnabled || _planning == null) return [];
+        return _planning.Assignments.Where(a => a.TaskName == ZeelandiaTaskName).ToList();
+    }
+
+    private void ExcludeZeelandiaFromSolverSettings(List<PlanningAssignment> zeelandiaAssignments)
+    {
+        if (!_zeelandiaEnabled || _zeelandiaTask == null) return;
+
+        // Remove Zeelandia task from solver
+        _settings.ActiveTaskIds = _settings.ActiveTaskIds
+            .Where(id => id != _zeelandiaTask.Id)
+            .ToList();
+
+        // Remove Zeelandia workers from solver pool
+        var zeelandiaWorkerNames = zeelandiaAssignments.Select(a => a.WorkerName).ToHashSet();
+        var zeelandiaWorkerIds = _allPersons
+            .Where(p => zeelandiaWorkerNames.Contains(p.Name))
+            .Select(p => p.Id)
+            .ToHashSet();
+        _settings.PresentWorkerIds = _settings.PresentWorkerIds
+            .Where(id => !zeelandiaWorkerIds.Contains(id))
+            .ToList();
+    }
+
     private void ToggleTask(string id, bool selected)
     {
         if (selected)
@@ -306,6 +381,10 @@ else
             _settings.ActiveTaskIds = _selectedTaskIds.ToList();
             _settings.Date = DateOnly.FromDateTime(_dateValue);
 
+            // Zeelandia: preserve board assignments and exclude from solver
+            var zeelandiaAssignments = GetZeelandiaAssignments();
+            ExcludeZeelandiaFromSolverSettings(zeelandiaAssignments);
+
             // Run solver on background thread so the UI can render the spinner
             _solverResult = await Task.Run(() => PlanningService.GeneratePlanningAsync(_settings));
 
@@ -316,7 +395,7 @@ else
                     Date = _settings.Date,
                     DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
                     Strategy = _settings.Strategy,
-                    Assignments = _solverResult.Assignments,
+                    Assignments = zeelandiaAssignments.Concat(_solverResult.Assignments).ToList(),
                     Warnings = _solverResult.Warnings,
                     AbsentWorkers = absentNames.ToList(),
                 };
@@ -353,7 +432,14 @@ else
             _settings.ActiveTaskIds = _selectedTaskIds.ToList();
             _settings.Date = DateOnly.FromDateTime(_dateValue);
 
-            _solverResult = await Task.Run(() => PlanningService.ValidateAssignmentsAsync(_settings, _planning!.Assignments));
+            // Zeelandia: exclude from solver validation
+            var zeelandiaAssignments = GetZeelandiaAssignments();
+            ExcludeZeelandiaFromSolverSettings(zeelandiaAssignments);
+            var assignmentsToValidate = _planning!.Assignments
+                .Where(a => a.TaskName != ZeelandiaTaskName)
+                .ToList();
+
+            _solverResult = await Task.Run(() => PlanningService.ValidateAssignmentsAsync(_settings, assignmentsToValidate));
             RunComplianceCheck();
         }
         catch (Exception ex)
@@ -380,9 +466,15 @@ else
         _solverResult = null;
 
         var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
-        var selectedTasks = _allTasks.Where(t => _selectedTaskIds.Contains(t.Id)).ToList();
+        var zeelandiaAssignments = GetZeelandiaAssignments();
+        var zeelandiaWorkerNames = zeelandiaAssignments.Select(a => a.WorkerName).ToHashSet();
+        var selectedTasks = _allTasks
+            .Where(t => _selectedTaskIds.Contains(t.Id) &&
+                        !(_zeelandiaEnabled && _zeelandiaTask != null && t.Id == _zeelandiaTask.Id))
+            .ToList();
         var availableWorkers = _allPersons
-            .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+            .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name)
+                        && !zeelandiaWorkerNames.Contains(p.Name))
             .ToList();
 
         var rng = new Random();
@@ -493,7 +585,7 @@ else
             Date = DateOnly.FromDateTime(_dateValue),
             DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
             Strategy = _settings.Strategy,
-            Assignments = assignments,
+            Assignments = zeelandiaAssignments.Concat(assignments).ToList(),
             AbsentWorkers = absentNames.ToList(),
         };
 

@@ -185,7 +185,8 @@
         // Check skill level — reject if worker cannot do this task
         var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
         var isCustomTask = Planning.CustomTasks.Any(ct => ct.TaskName == targetTaskName);
-        var skillLevel = isCustomTask ? SkillLevel.Beginner : SkillLevel.Cannot;
+        var isZeelandia = targetTaskName == "Laden/lossen Zeelandia";
+        var skillLevel = (isCustomTask || isZeelandia) ? SkillLevel.Beginner : SkillLevel.Cannot;
         if (person != null && person.Skills.TryGetValue(targetTaskName, out var sl))
         {
             skillLevel = sl;
