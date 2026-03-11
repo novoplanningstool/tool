@@ -28,15 +28,22 @@
 
         if (totalTasks > 0)
         {
-            <div class="planning-progress @progressClass mb-2">
-                Planning: <strong>@completeTasks/@totalTasks</strong> taken compleet
-                @if (unassignedCount > 0)
+            <div class="planning-progress @progressClass mb-2 d-flex align-items-center justify-content-between">
+                <span>
+                    Planning: <strong>@completeTasks/@totalTasks</strong> taken compleet
+                    @if (unassignedCount > 0)
+                    {
+                        <text> | </text><strong>@unassignedCount</strong><text> niet ingepland</text>
+                    }
+                    @if (problemCount > 0)
+                    {
+                        <text> | </text><strong>@problemCount</strong><text> problemen</text>
+                    }
+                </span>
+                @if (_undoSnapshot != null)
                 {
-                    <text> | </text><strong>@unassignedCount</strong><text> niet ingepland</text>
-                }
-                @if (problemCount > 0)
-                {
-                    <text> | </text><strong>@problemCount</strong><text> problemen</text>
+                    <button class="btn btn-sm btn-outline-secondary undo-btn" @onclick="Undo" @onclick:stopPropagation="true"
+                            title="Laatste actie ongedaan maken">Ongedaan maken</button>
                 }
             </div>
         }
@@ -60,9 +67,10 @@
                                   Assignments="@entry.Assignments"
                                   TaskDef="@entry.TaskDef"
                                   Violations="@taskViolations"
-                                  OnRemove="@(() => RemoveTaskFromBoard(key))"
+                                  OnRemove="@(() => ConfirmRemoveTaskFromBoard(key))"
                                   OnHeaderClick="@(() => ToggleHighlight(key))"
                                   OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
+                                  OnClearAll="@(() => ClearAllFromTask(key))"
                                   HighlightedTaskName="@HighlightedTaskName"
                                   AllPersons="AllPersons" />
                 }
@@ -77,9 +85,10 @@
                                   Assignments="@entry.Assignments"
                                   TaskDef="@entry.TaskDef"
                                   Violations="@taskViolations"
-                                  OnRemove="@(() => RemoveTaskFromBoard(key))"
+                                  OnRemove="@(() => ConfirmRemoveTaskFromBoard(key))"
                                   OnHeaderClick="@(() => ToggleHighlight(key))"
                                   OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
+                                  OnClearAll="@(() => ClearAllFromTask(key))"
                                   HighlightedTaskName="@HighlightedTaskName"
                                   AllPersons="AllPersons" />
                 }
@@ -95,13 +104,16 @@
                     var taskName = ct.TaskName;
                     var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
                     var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
+                    var customDef = new TaskDefinition { Name = taskName, HeadcountRequired = ct.HeadcountRequired };
                     <div class="col-md-6">
                         <KanbanColumn TaskName="@taskName"
                                       Assignments="@assignments"
+                                      TaskDef="@customDef"
                                       Violations="@taskViolations"
-                                      OnRemove="@(() => RemoveCustomTask(taskName))"
+                                      OnRemove="@(() => ConfirmRemoveCustomTask(taskName))"
                                       OnHeaderClick="@(() => ToggleHighlight(taskName))"
                                       OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
+                                      OnClearAll="@(() => ClearAllFromTask(taskName))"
                                       HighlightedTaskName="@HighlightedTaskName"
                                       AllPersons="AllPersons" />
                     </div>
@@ -109,12 +121,21 @@
             </div>
         }
 
-        <div class="input-group mt-2 mb-3" style="max-width: 400px;" @onclick:stopPropagation="true">
+        <div class="input-group mt-2 mb-3" style="max-width: 500px;"
+             @onclick:stopPropagation="true"
+             ondragover="event.preventDefault(); event.dataTransfer.dropEffect='none';"
+             ondrop="event.preventDefault();">
             <input type="text" class="form-control form-control-sm"
                    placeholder="Nieuwe aangepaste taak..."
                    @bind="_newCustomTaskName"
                    @bind:event="oninput"
                    @onkeydown="HandleCustomTaskKeyDown" />
+            <input type="number" class="form-control form-control-sm" style="max-width: 80px;"
+                   placeholder="Aantal"
+                   min="1" max="20"
+                   @bind="_newCustomTaskHeadcount"
+                   @bind:event="oninput"
+                   title="Aantal mensen nodig" />
             <button class="btn btn-sm btn-outline-primary" @onclick="AddCustomTask"
                     disabled="@string.IsNullOrWhiteSpace(_newCustomTaskName)">
                 + Taak
@@ -124,7 +145,7 @@
         <div class="kanban-sticky-pool" @onclick:stopPropagation="true">
             <UnassignedPool @key="@HighlightedTaskName"
                             Planning="Planning" AllPersons="AllPersons"
-                            OnMoveAllToAbsent="MoveAllToAbsent"
+                            OnMoveAllToAbsent="ConfirmMoveAllToAbsent"
                             OnMoveAllToUnplanned="MoveAllToUnplanned"
                             HighlightedTaskName="@HighlightedTaskName"
                             OnWorkerDoubleClick="AssignWorkerToHighlightedTask" />
@@ -147,7 +168,38 @@
 
     private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
     private string _newCustomTaskName = "";
+    private int _newCustomTaskHeadcount = 2;
     private DotNetObjectReference<KanbanBoard>? _dotNetRef;
+
+    // Undo state (#7)
+    private record UndoSnapshot(List<PlanningAssignment> Assignments, List<string> AbsentWorkers);
+    private UndoSnapshot? _undoSnapshot;
+
+    private void SaveUndoSnapshot()
+    {
+        if (Planning == null) return;
+        _undoSnapshot = new UndoSnapshot(
+            Planning.Assignments.Select(a => new PlanningAssignment
+            {
+                TaskName = a.TaskName,
+                WorkerName = a.WorkerName,
+                SkillLevel = a.SkillLevel
+            }).ToList(),
+            new List<string>(Planning.AbsentWorkers)
+        );
+    }
+
+    private async Task Undo()
+    {
+        if (Planning == null || _undoSnapshot == null) return;
+        Planning.Assignments.Clear();
+        Planning.Assignments.AddRange(_undoSnapshot.Assignments);
+        Planning.AbsentWorkers.Clear();
+        Planning.AbsentWorkers.AddRange(_undoSnapshot.AbsentWorkers);
+        _undoSnapshot = null;
+        await OnAssignmentChanged.InvokeAsync();
+        StateHasChanged();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -164,6 +216,16 @@
         {
             await JSRuntime.InvokeVoidAsync("novoDragDrop.unregisterDropHandler");
             _dotNetRef.Dispose();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnEscapePressed()
+    {
+        if (!string.IsNullOrEmpty(HighlightedTaskName))
+        {
+            await OnHighlightChanged.InvokeAsync(null);
+            StateHasChanged();
         }
     }
 
@@ -188,6 +250,8 @@
             return;
         }
 
+        SaveUndoSnapshot();
+
         Planning.AbsentWorkers.Remove(workerName);
 
         if (!string.IsNullOrEmpty(sourceTask))
@@ -203,6 +267,7 @@
         });
 
         await OnAssignmentChanged.InvokeAsync();
+        await JSRuntime.InvokeVoidAsync("novoDragDrop.flashSuccess", targetTaskName);
         StateHasChanged();
     }
 
@@ -237,6 +302,8 @@
     {
         if (Planning == null) return;
 
+        SaveUndoSnapshot();
+
         if (!string.IsNullOrEmpty(sourceTask) && sourceTask != "__absent__")
         {
             Planning.Assignments.RemoveAll(a => a.TaskName == sourceTask && a.WorkerName == workerName);
@@ -252,6 +319,8 @@
     public async Task OnDropAbsent(string workerName, string? sourceTask)
     {
         if (Planning == null) return;
+
+        SaveUndoSnapshot();
 
         if (!string.IsNullOrEmpty(sourceTask) && sourceTask != "__absent__")
         {
@@ -270,6 +339,7 @@
     private async Task RemoveWorkerFromTask(string taskName, string workerName)
     {
         if (Planning == null) return;
+        SaveUndoSnapshot();
         Planning.Assignments.RemoveAll(a => a.TaskName == taskName && a.WorkerName == workerName);
         await OnAssignmentChanged.InvokeAsync();
         StateHasChanged();
@@ -308,15 +378,10 @@
 
     private int CountCompleteTasks(List<TaskColumnData> left, List<TaskColumnData> right)
     {
-        var count = 0;
-        foreach (var entry in left.Concat(right))
-        {
-            if (IsTaskComplete(entry)) count++;
-        }
-        return count;
+        return left.Concat(right).Count(IsTaskComplete);
     }
 
-    private bool IsTaskComplete(TaskColumnData entry)
+    private static bool IsTaskComplete(TaskColumnData entry)
     {
         var td = entry.TaskDef;
         var assigned = entry.Assignments;
@@ -328,8 +393,8 @@
         var beginners = counts.GetValueOrDefault(SkillLevel.Beginner);
 
         if (td.MinWorkersLevel1 > 0 && experts < td.MinWorkersLevel1) return false;
-        if (td.MinWorkersLevel2 > 0 && (experts + experienced) < td.MinWorkersLevel2) return false;
-        if (td.MinWorkersLevel3 > 0 && (experts + experienced + beginners) < td.MinWorkersLevel3) return false;
+        if (td.MinWorkersLevel2 > 0 && experts + experienced < td.MinWorkersLevel2) return false;
+        if (td.MinWorkersLevel3 > 0 && experts + experienced + beginners < td.MinWorkersLevel3) return false;
 
         return true;
     }
@@ -352,7 +417,7 @@
         var targetIndex = siblings.IndexOf(target);
         siblings.Insert(targetIndex, dragged);
 
-        for (int i = 0; i < siblings.Count; i++)
+        for (var i = 0; i < siblings.Count; i++)
         {
             if (siblings[i].SortOrder != i)
             {
@@ -362,9 +427,35 @@
         }
     }
 
+    // Confirmation wrappers (#8)
+    private async Task ConfirmMoveAllToAbsent()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Alle niet-ingeplande medewerkers als afwezig markeren?");
+        if (!confirmed) return;
+        await MoveAllToAbsent();
+    }
+
+    private async Task ConfirmRemoveTaskFromBoard(string taskName)
+    {
+        if (Planning?.Assignments.Any(a => a.TaskName == taskName) == true)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Taak '{taskName}' van het bord verwijderen? Toegewezen medewerkers worden losgemaakt.");
+            if (!confirmed) return;
+        }
+        await RemoveTaskFromBoard(taskName);
+    }
+
+    private async Task ConfirmRemoveCustomTask(string taskName)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Aangepaste taak '{taskName}' verwijderen?");
+        if (!confirmed) return;
+        await RemoveCustomTask(taskName);
+    }
+
     private async Task MoveAllToAbsent()
     {
         if (Planning == null) return;
+        SaveUndoSnapshot();
         var assignedWorkers = Planning.Assignments.Select(a => a.WorkerName).ToHashSet();
         var unplanned = AllPersons
             .Where(p => p.Id != "temp-worker-template"
@@ -383,6 +474,7 @@
     private async Task MoveAllToUnplanned()
     {
         if (Planning == null) return;
+        SaveUndoSnapshot();
         Planning.AbsentWorkers.RemoveAll(name => !DayOffWorkerNames.Contains(name));
         await OnAssignmentChanged.InvokeAsync();
     }
@@ -391,6 +483,7 @@
     {
         if (Planning != null)
         {
+            SaveUndoSnapshot();
             Planning.Assignments.RemoveAll(a => a.TaskName == taskName);
         }
 
@@ -410,8 +503,13 @@
         if (string.IsNullOrWhiteSpace(name) || Planning == null) return;
         if (Planning.CustomTasks.Any(ct => ct.TaskName.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
 
-        Planning.CustomTasks.Add(new CustomTask { TaskName = name });
+        Planning.CustomTasks.Add(new CustomTask
+        {
+            TaskName = name,
+            HeadcountRequired = Math.Max(1, _newCustomTaskHeadcount)
+        });
         _newCustomTaskName = "";
+        _newCustomTaskHeadcount = 2;
         await OnAssignmentChanged.InvokeAsync();
         await OnHighlightChanged.InvokeAsync(name);
     }
@@ -419,6 +517,7 @@
     private async Task RemoveCustomTask(string taskName)
     {
         if (Planning == null) return;
+        SaveUndoSnapshot();
         Planning.CustomTasks.RemoveAll(ct => ct.TaskName == taskName);
         Planning.Assignments.RemoveAll(a => a.TaskName == taskName);
 
@@ -436,6 +535,22 @@
         }
     }
 
+    // Bulk: clear all workers from a task (#13)
+    private async Task ClearAllFromTask(string taskName)
+    {
+        if (Planning == null) return;
+        var count = Planning.Assignments.Count(a => a.TaskName == taskName);
+        if (count == 0) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Alle {count} medewerkers loskoppelen van '{taskName}'?");
+        if (!confirmed) return;
+
+        SaveUndoSnapshot();
+        Planning.Assignments.RemoveAll(a => a.TaskName == taskName);
+        await OnAssignmentChanged.InvokeAsync();
+        StateHasChanged();
+    }
+
     private async Task AssignWorkerToHighlightedTask(string workerName)
     {
         if (Planning == null || string.IsNullOrEmpty(HighlightedTaskName)) return;
@@ -446,6 +561,8 @@
         var skillLevel = ResolveSkillLevel(person, HighlightedTaskName);
         if (skillLevel == SkillLevel.Cannot) return;
 
+        SaveUndoSnapshot();
+
         Planning.Assignments.Add(new PlanningAssignment
         {
             TaskName = HighlightedTaskName,
@@ -454,6 +571,7 @@
         });
 
         await OnAssignmentChanged.InvokeAsync();
+        await JSRuntime.InvokeVoidAsync("novoDragDrop.flashSuccess", HighlightedTaskName);
         StateHasChanged();
     }
 }

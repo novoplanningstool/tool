@@ -37,6 +37,15 @@
                     el.classList.add('drop-rejected');
                     setTimeout(function () { el.classList.remove('drop-rejected'); }, 500);
                 }
+            },
+            flashSuccess: function (taskName) {
+                var el = document.querySelector('[data-drop-task="' + taskName + '"]');
+                if (el) {
+                    el.classList.remove('drop-success');
+                    void el.offsetWidth; // force reflow
+                    el.classList.add('drop-success');
+                    setTimeout(function () { el.classList.remove('drop-success'); }, 600);
+                }
             }
         };
 
@@ -102,6 +111,16 @@
             document.querySelectorAll('.drag-over').forEach(function (el) {
                 el.classList.remove('drag-over');
             });
+        });
+
+        // Escape key clears highlight (#5)
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var dd = window.novoDragDrop;
+                if (dd._dotNetRef) {
+                    dd._dotNetRef.invokeMethodAsync('OnEscapePressed');
+                }
+            }
         });
 
         // Handle drop entirely in JS, then call .NET
