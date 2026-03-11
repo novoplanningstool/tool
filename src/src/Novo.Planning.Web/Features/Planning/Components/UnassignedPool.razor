@@ -1,6 +1,8 @@
 @if (Planning != null)
 {
-    var assignedWorkers = Planning.Assignments.Select(a => a.WorkerName).ToHashSet();
+    var assignedWorkers = Planning.Assignments
+        .Where(a => a.TaskName != "Laden/lossen Zeelandia")
+        .Select(a => a.WorkerName).ToHashSet();
     var unassigned = AllPersons
         .Where(p => p.Id != "temp-worker-template" && !assignedWorkers.Contains(p.Name) && !Planning.AbsentWorkers.Contains(p.Name))
         .ToList();
@@ -98,16 +100,6 @@
 
     private string GetAbsentBadgeClass(Person? person)
     {
-        if (string.IsNullOrEmpty(HighlightedTaskName) || person == null)
-            return "bg-light text-dark border";
-
-        return GetSkillForTask(person) switch
-        {
-            SkillLevel.Expert => "bg-success text-white",
-            SkillLevel.Experienced => "bg-info text-dark",
-            SkillLevel.Beginner => "bg-warning text-dark",
-            SkillLevel.Cannot => "bg-danger text-white",
-            _ => "bg-light text-dark border"
-        };
+        return "bg-light text-dark border";
     }
 }

@@ -201,7 +201,7 @@ else
 
     // Zeelandia special task
     private TaskDefinition? _zeelandiaTask;
-    private bool _zeelandiaEnabled;
+    private bool _zeelandiaEnabled = true;
 
     private bool HasAssignments => _planning?.Assignments.Count > 0;
 
@@ -240,7 +240,8 @@ else
         // Everyone can do Zeelandia — set all persons to Expert
         foreach (var person in _allPersons)
             person.Skills[ZeelandiaTaskName] = SkillLevel.Expert;
-        // Zeelandia is disabled by default; user toggles it on when needed
+        // Zeelandia is enabled by default
+        _selectedTaskIds.Add(_zeelandiaTask.Id);
 
         // Initialize empty planning so the board renders immediately
         _planning ??= CreateEmptyPlanning();
