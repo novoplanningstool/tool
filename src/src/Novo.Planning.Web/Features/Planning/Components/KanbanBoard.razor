@@ -96,20 +96,14 @@
                     var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
                     var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
                     <div class="col-md-6">
-                        <div class="position-relative">
-                            <KanbanColumn TaskName="@taskName"
-                                          Assignments="@assignments"
-                                          Violations="@taskViolations"
-                                          OnHeaderClick="@(() => ToggleHighlight(taskName))"
-                                          OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
-                                          HighlightedTaskName="@HighlightedTaskName"
-                                          AllPersons="AllPersons" />
-                            <button class="btn btn-sm btn-outline-danger position-absolute"
-                                    style="top: 4px; right: 8px; padding: 0 6px; line-height: 1.4;"
-                                    @onclick="() => RemoveCustomTask(taskName)"
-                                    @onclick:stopPropagation="true"
-                                    title="Verwijder taak">&#215;</button>
-                        </div>
+                        <KanbanColumn TaskName="@taskName"
+                                      Assignments="@assignments"
+                                      Violations="@taskViolations"
+                                      OnRemove="@(() => RemoveCustomTask(taskName))"
+                                      OnHeaderClick="@(() => ToggleHighlight(taskName))"
+                                      OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
+                                      HighlightedTaskName="@HighlightedTaskName"
+                                      AllPersons="AllPersons" />
                     </div>
                 }
             </div>
@@ -128,7 +122,8 @@
         </div>
 
         <div class="kanban-sticky-pool" @onclick:stopPropagation="true">
-            <UnassignedPool Planning="Planning" AllPersons="AllPersons"
+            <UnassignedPool @key="@HighlightedTaskName"
+                            Planning="Planning" AllPersons="AllPersons"
                             OnMoveAllToAbsent="MoveAllToAbsent"
                             OnMoveAllToUnplanned="MoveAllToUnplanned"
                             HighlightedTaskName="@HighlightedTaskName"
@@ -150,6 +145,7 @@
     [Parameter] public string? HighlightedTaskName { get; set; }
     [Parameter] public EventCallback<string?> OnHighlightChanged { get; set; }
 
+    private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
     private string _newCustomTaskName = "";
     private DotNetObjectReference<KanbanBoard>? _dotNetRef;
 
@@ -185,13 +181,7 @@
 
         // Check skill level — reject if worker cannot do this task
         var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
-        var isCustomTask = Planning.CustomTasks.Any(ct => ct.TaskName == targetTaskName);
-        var isZeelandia = targetTaskName == "Laden/lossen Zeelandia";
-        var skillLevel = (isCustomTask || isZeelandia) ? SkillLevel.Beginner : SkillLevel.Cannot;
-        if (person != null && person.Skills.TryGetValue(targetTaskName, out var sl))
-        {
-            skillLevel = sl;
-        }
+        var skillLevel = ResolveSkillLevel(person, targetTaskName);
         if (skillLevel == SkillLevel.Cannot)
         {
             await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", targetTaskName);
@@ -283,6 +273,16 @@
         Planning.Assignments.RemoveAll(a => a.TaskName == taskName && a.WorkerName == workerName);
         await OnAssignmentChanged.InvokeAsync();
         StateHasChanged();
+    }
+
+    private SkillLevel ResolveSkillLevel(Person? person, string taskName)
+    {
+        var isCustomTask = Planning?.CustomTasks.Any(ct => ct.TaskName == taskName) ?? false;
+        var isZeelandia = taskName == ZeelandiaTaskName;
+        var skillLevel = isCustomTask || isZeelandia ? SkillLevel.Expert : SkillLevel.Cannot;
+        if (person != null && person.Skills.TryGetValue(taskName, out var sl))
+            skillLevel = sl;
+        return skillLevel;
     }
 
     private async Task ClearHighlight()
@@ -412,8 +412,8 @@
 
         Planning.CustomTasks.Add(new CustomTask { TaskName = name });
         _newCustomTaskName = "";
-        await OnHighlightChanged.InvokeAsync(name);
         await OnAssignmentChanged.InvokeAsync();
+        await OnHighlightChanged.InvokeAsync(name);
     }
 
     private async Task RemoveCustomTask(string taskName)
@@ -443,12 +443,7 @@
         var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
         if (person == null) return;
 
-        var isCustomTask = Planning.CustomTasks.Any(ct => ct.TaskName == HighlightedTaskName);
-        var isZeelandia = HighlightedTaskName == "Laden/lossen Zeelandia";
-        var skillLevel = (isCustomTask || isZeelandia) ? SkillLevel.Beginner : SkillLevel.Cannot;
-        if (person.Skills.TryGetValue(HighlightedTaskName, out var sl))
-            skillLevel = sl;
-
+        var skillLevel = ResolveSkillLevel(person, HighlightedTaskName);
         if (skillLevel == SkillLevel.Cannot) return;
 
         Planning.Assignments.Add(new PlanningAssignment

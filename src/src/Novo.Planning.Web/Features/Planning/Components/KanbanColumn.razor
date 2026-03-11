@@ -5,7 +5,7 @@
 <div class="kanban-column card mb-2 @statusClass"
      data-drop-task="@TaskName"
      @onclick:stopPropagation="true">
-    <div class="card-header d-flex justify-content-between align-items-center py-1"
+    <div class="card-header d-flex justify-content-between align-items-center py-1 pe-2"
          draggable="true"
          data-drag-column="@TaskName"
          style="background-color: @(IsHighlighted ? "#3d8a82" : "#59B6AD"); color: white; cursor: grab;"
@@ -15,7 +15,7 @@
             <span class="badge bg-light text-dark">@Assignments.Count</span>
             @if (OnRemove.HasDelegate)
             {
-                <button class="btn btn-sm text-white p-0 ms-1" style="line-height: 1; font-size: 0.9rem; opacity: 0.8;"
+                <button class="btn btn-sm text-white p-0 ms-2" style="line-height: 1; font-size: 0.9rem; opacity: 0.8;"
                         @onclick="OnRemove" @onclick:stopPropagation="true" title="Verwijder van bord">&#215;</button>
             }
         </div>

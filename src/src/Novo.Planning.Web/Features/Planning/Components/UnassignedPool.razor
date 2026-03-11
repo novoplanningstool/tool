@@ -73,10 +73,12 @@
 
     private SkillLevel GetSkillForTask(Person person)
     {
-        if (!string.IsNullOrEmpty(HighlightedTaskName) &&
-            person.Skills.TryGetValue(HighlightedTaskName, out var sl))
-            return sl;
-        return SkillLevel.Cannot;
+        if (string.IsNullOrEmpty(HighlightedTaskName))
+            return SkillLevel.Cannot;
+
+        // If person has an explicit skill entry, use it; otherwise treat as Expert
+        // (tasks from Excel always have skill entries; missing = custom/Zeelandia = everyone can do it)
+        return person.Skills.TryGetValue(HighlightedTaskName, out var sl) ? sl : SkillLevel.Expert;
     }
 
     private string GetBadgeClass(Person person)
