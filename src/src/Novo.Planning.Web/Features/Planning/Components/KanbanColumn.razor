@@ -20,6 +20,11 @@
                 <button class="bulk-btn" @onclick="OnClearAll" @onclick:stopPropagation="true"
                         title="Alle medewerkers loskoppelen">Leeg</button>
             }
+            @if (OnTaskEdited.HasDelegate)
+            {
+                <button class="edit-btn" @onclick="ToggleEdit" @onclick:stopPropagation="true"
+                        title="Taak bewerken">&#9998;</button>
+            }
             <span class="badge bg-light text-dark">@Assignments.Count</span>
             @if (OnRemove.HasDelegate)
             {
@@ -28,6 +33,31 @@
             }
         </div>
     </div>
+    @if (IsEditing && TaskDef != null)
+    {
+        <div class="task-edit-popover" @onclick:stopPropagation="true">
+            <div class="mb-1">
+                <label>Aantal mensen</label>
+                <input type="number" min="1" max="20" @bind="_editHeadcount" class="form-control form-control-sm" />
+            </div>
+            @if (!HeadcountOnly)
+            {
+                <div class="mb-1">
+                    <label>Min. Expert</label>
+                    <input type="number" min="0" @bind="_editLevel1" class="form-control form-control-sm" />
+                </div>
+                <div class="mb-1">
+                    <label>Min. Ervaren+</label>
+                    <input type="number" min="0" @bind="_editLevel2" class="form-control form-control-sm" />
+                </div>
+                <div class="mb-1">
+                    <label>Min. Beginner+</label>
+                    <input type="number" min="0" @bind="_editLevel3" class="form-control form-control-sm" />
+                </div>
+            }
+            <button class="btn btn-sm btn-primary mt-1" @onclick="SaveEdit">Opslaan</button>
+        </div>
+    }
     @if (TaskDef != null)
     {
         <div class="card-body p-1 border-bottom" style="font-size: 0.8rem; background: #f8f9fa;">
@@ -116,8 +146,62 @@
     [Parameter] public List<ComplianceViolation> Violations { get; set; } = [];
     [Parameter] public EventCallback<string> OnWorkerRemoved { get; set; }
     [Parameter] public EventCallback OnClearAll { get; set; }
+    [Parameter] public bool IsEditing { get; set; }
+    [Parameter] public EventCallback<string?> OnEditToggle { get; set; }
+    [Parameter] public EventCallback<TaskDefinition> OnTaskEdited { get; set; }
+    [Parameter] public bool HeadcountOnly { get; set; }
+
+    private int _editHeadcount;
+    private int _editLevel1Backing;
+    private int _editLevel2Backing;
+    private int _editLevel3Backing;
+    private bool _wasEditing;
+
+    private int _editLevel1
+    {
+        get => _editLevel1Backing;
+        set { var delta = Math.Max(0, value) - _editLevel1Backing; _editLevel1Backing = Math.Max(0, value); _editHeadcount = Math.Max(1, _editHeadcount + delta); }
+    }
+    private int _editLevel2
+    {
+        get => _editLevel2Backing;
+        set { var delta = Math.Max(0, value) - _editLevel2Backing; _editLevel2Backing = Math.Max(0, value); _editHeadcount = Math.Max(1, _editHeadcount + delta); }
+    }
+    private int _editLevel3
+    {
+        get => _editLevel3Backing;
+        set { var delta = Math.Max(0, value) - _editLevel3Backing; _editLevel3Backing = Math.Max(0, value); _editHeadcount = Math.Max(1, _editHeadcount + delta); }
+    }
 
     private bool IsHighlighted => HighlightedTaskName == TaskName;
+
+    protected override void OnParametersSet()
+    {
+        if (IsEditing && !_wasEditing && TaskDef != null)
+        {
+            _editHeadcount = TaskDef.HeadcountRequired;
+            _editLevel1Backing = TaskDef.MinWorkersLevel1;
+            _editLevel2Backing = TaskDef.MinWorkersLevel2;
+            _editLevel3Backing = TaskDef.MinWorkersLevel3;
+        }
+        _wasEditing = IsEditing;
+    }
+
+    private async Task ToggleEdit()
+    {
+        await OnEditToggle.InvokeAsync(IsEditing ? null : TaskName);
+    }
+
+    private async Task SaveEdit()
+    {
+        if (TaskDef == null) return;
+        TaskDef.HeadcountRequired = Math.Max(1, _editHeadcount);
+        TaskDef.MinWorkersLevel1 = Math.Max(0, _editLevel1);
+        TaskDef.MinWorkersLevel2 = Math.Max(0, _editLevel2);
+        TaskDef.MinWorkersLevel3 = Math.Max(0, _editLevel3);
+        await OnTaskEdited.InvokeAsync(TaskDef);
+        await OnEditToggle.InvokeAsync(null);
+    }
 
     private Dictionary<SkillLevel, int> GetSkillCounts()
     {

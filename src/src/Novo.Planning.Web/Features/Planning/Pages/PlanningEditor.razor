@@ -171,7 +171,8 @@ else
                              OnHighlightChanged="OnHighlightChanged"
                              OnAssignmentChanged="OnAssignmentChanged"
                              OnTaskRemoved="OnTaskRemovedFromBoard"
-                             OnTaskMoved="OnTaskMoved" />
+                             OnTaskMoved="OnTaskMoved"
+                             OnTaskEdited="OnTaskEdited" />
 
                 <CompliancePanel Violations="_violations" />
             }
@@ -680,11 +681,31 @@ else
         StateHasChanged();
     }
 
+    private async Task OnTaskEdited(TaskDefinition task)
+    {
+        // Persist regular task changes (custom tasks are in-memory only)
+        if (_allTasks.Any(t => t.Id == task.Id))
+            await TaskRepository.UpsertAsync(task);
+        RunComplianceCheck();
+        StateHasChanged();
+    }
+
     private void RunComplianceCheck()
     {
         if (_planning != null)
         {
             var boardTasks = _allTasks.Where(t => _selectedTaskIds.Contains(t.Id)).ToList();
+            foreach (var ct in _planning.CustomTasks)
+            {
+                boardTasks.Add(new TaskDefinition
+                {
+                    Name = ct.TaskName,
+                    HeadcountRequired = ct.HeadcountRequired,
+                    MinWorkersLevel1 = ct.MinWorkersLevel1,
+                    MinWorkersLevel2 = ct.MinWorkersLevel2,
+                    MinWorkersLevel3 = ct.MinWorkersLevel3
+                });
+            }
             _violations = ComplianceValidator.Validate(_planning, _allPersons, boardTasks);
         }
     }

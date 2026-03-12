@@ -245,3 +245,48 @@ h1:focus {
     opacity: 1;
     background: rgba(255,255,255,0.15);
 }
+
+/* Kanban column positioning for popover */
+.kanban-column {
+    position: relative;
+}
+
+/* Inline task edit popover */
+.task-edit-popover {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0 0 4px 4px;
+    padding: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    font-size: 0.8rem;
+}
+
+.task-edit-popover label {
+    font-weight: 500;
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+/* Edit pencil button */
+.edit-btn {
+    font-size: 0.85rem;
+    padding: 1px 5px;
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 3px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    opacity: 0.85;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.edit-btn:hover {
+    opacity: 1;
+    background: rgba(255,255,255,0.3);
+}

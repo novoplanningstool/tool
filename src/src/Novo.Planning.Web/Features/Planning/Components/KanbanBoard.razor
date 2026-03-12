@@ -74,7 +74,11 @@
                                   OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
                                   OnClearAll="@(() => ClearAllFromTask(key))"
                                   HighlightedTaskName="@HighlightedTaskName"
-                                  AllPersons="AllPersons" />
+                                  AllPersons="AllPersons"
+                                  IsEditing="@(_editingTaskName == key)"
+                                  OnEditToggle="@(name => { _editingTaskName = _editingTaskName == name ? null : name; })"
+                                  OnTaskEdited="HandleTaskEdited"
+                                  HeadcountOnly="@(key == ZeelandiaTaskName)" />
                 }
             </div>
             <div class="col-md-6 drop-zone" data-drop-side="right">
@@ -92,7 +96,11 @@
                                   OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
                                   OnClearAll="@(() => ClearAllFromTask(key))"
                                   HighlightedTaskName="@HighlightedTaskName"
-                                  AllPersons="AllPersons" />
+                                  AllPersons="AllPersons"
+                                  IsEditing="@(_editingTaskName == key)"
+                                  OnEditToggle="@(name => { _editingTaskName = _editingTaskName == name ? null : name; })"
+                                  OnTaskEdited="HandleTaskEdited"
+                                  HeadcountOnly="@(key == ZeelandiaTaskName)" />
                 }
             </div>
         </div>
@@ -106,7 +114,14 @@
                     var taskName = ct.TaskName;
                     var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
                     var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
-                    var customDef = new TaskDefinition { Name = taskName, HeadcountRequired = ct.HeadcountRequired };
+                    var customDef = new TaskDefinition
+                    {
+                        Name = taskName,
+                        HeadcountRequired = ct.HeadcountRequired,
+                        MinWorkersLevel1 = ct.MinWorkersLevel1,
+                        MinWorkersLevel2 = ct.MinWorkersLevel2,
+                        MinWorkersLevel3 = ct.MinWorkersLevel3
+                    };
                     <div class="col-md-6">
                         <KanbanColumn TaskName="@taskName"
                                       Assignments="@assignments"
@@ -117,7 +132,11 @@
                                       OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
                                       OnClearAll="@(() => ClearAllFromTask(taskName))"
                                       HighlightedTaskName="@HighlightedTaskName"
-                                      AllPersons="AllPersons" />
+                                      AllPersons="AllPersons"
+                                      IsEditing="@(_editingTaskName == taskName)"
+                                      OnEditToggle="@(name => { _editingTaskName = _editingTaskName == name ? null : name; })"
+                                      OnTaskEdited="HandleTaskEdited"
+                                      HeadcountOnly="true" />
                     </div>
                 }
             </div>
@@ -165,12 +184,14 @@
     [Parameter] public EventCallback OnAssignmentChanged { get; set; }
     [Parameter] public EventCallback<string> OnTaskRemoved { get; set; }
     [Parameter] public EventCallback<TaskDefinition> OnTaskMoved { get; set; }
+    [Parameter] public EventCallback<TaskDefinition> OnTaskEdited { get; set; }
     [Parameter] public string? HighlightedTaskName { get; set; }
     [Parameter] public EventCallback<string?> OnHighlightChanged { get; set; }
 
     private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
     private string _newCustomTaskName = "";
     private int _newCustomTaskHeadcount = 2;
+    private string? _editingTaskName;
     private DotNetObjectReference<KanbanBoard>? _dotNetRef;
 
     // Undo state (#7)
@@ -224,6 +245,12 @@
     [JSInvokable]
     public async Task OnEscapePressed()
     {
+        if (_editingTaskName != null)
+        {
+            _editingTaskName = null;
+            StateHasChanged();
+            return;
+        }
         if (!string.IsNullOrEmpty(HighlightedTaskName))
         {
             await OnHighlightChanged.InvokeAsync(null);
@@ -247,6 +274,13 @@
         var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
         var skillLevel = ResolveSkillLevel(person, targetTaskName);
         if (skillLevel == SkillLevel.Cannot)
+        {
+            await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", targetTaskName);
+            return;
+        }
+
+        // Reject if already assigned to this task
+        if (Planning.Assignments.Any(a => a.TaskName == targetTaskName && a.WorkerName == workerName))
         {
             await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", targetTaskName);
             return;
@@ -359,6 +393,7 @@
 
     private async Task ClearHighlight()
     {
+        _editingTaskName = null;
         await OnHighlightChanged.InvokeAsync(null);
     }
 
@@ -555,6 +590,25 @@
         StateHasChanged();
     }
 
+    private async Task HandleTaskEdited(TaskDefinition editedDef)
+    {
+        if (Planning == null) return;
+
+        // Check if it's a custom task
+        var customTask = Planning.CustomTasks.FirstOrDefault(ct => ct.TaskName == editedDef.Name);
+        if (customTask != null)
+        {
+            customTask.HeadcountRequired = editedDef.HeadcountRequired;
+            customTask.MinWorkersLevel1 = editedDef.MinWorkersLevel1;
+            customTask.MinWorkersLevel2 = editedDef.MinWorkersLevel2;
+            customTask.MinWorkersLevel3 = editedDef.MinWorkersLevel3;
+        }
+
+        await OnTaskEdited.InvokeAsync(editedDef);
+        await OnAssignmentChanged.InvokeAsync();
+        StateHasChanged();
+    }
+
     private async Task AssignWorkerToHighlightedTask(string workerName)
     {
         if (Planning == null || string.IsNullOrEmpty(HighlightedTaskName)) return;
@@ -564,6 +618,10 @@
 
         var skillLevel = ResolveSkillLevel(person, HighlightedTaskName);
         if (skillLevel == SkillLevel.Cannot) return;
+
+        // Reject if already assigned to this task
+        if (Planning.Assignments.Any(a => a.TaskName == HighlightedTaskName && a.WorkerName == workerName))
+            return;
 
         SaveUndoSnapshot();
 
