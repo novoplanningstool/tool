@@ -270,14 +270,8 @@
             return;
         }
 
-        // Check skill level — reject if worker cannot do this task
         var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
         var skillLevel = ResolveSkillLevel(person, targetTaskName);
-        if (skillLevel == SkillLevel.Cannot)
-        {
-            await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", targetTaskName);
-            return;
-        }
 
         // Reject if already assigned to this task
         if (Planning.Assignments.Any(a => a.TaskName == targetTaskName && a.WorkerName == workerName))
@@ -617,7 +611,6 @@
         if (person == null) return;
 
         var skillLevel = ResolveSkillLevel(person, HighlightedTaskName);
-        if (skillLevel == SkillLevel.Cannot) return;
 
         // Reject if already assigned to this task
         if (Planning.Assignments.Any(a => a.TaskName == HighlightedTaskName && a.WorkerName == workerName))
