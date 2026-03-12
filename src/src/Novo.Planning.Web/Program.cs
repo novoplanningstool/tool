@@ -38,12 +38,4 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// Excel export download endpoint
-app.MapGet("/api/planning/{id}/export", async (string id, IPlanningService planningService) =>
-{
-    var bytes = await planningService.ExportToExcelAsync(id);
-    if (bytes == null) return Results.NotFound();
-    return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "planning.xlsx");
-});
-
 app.Run();

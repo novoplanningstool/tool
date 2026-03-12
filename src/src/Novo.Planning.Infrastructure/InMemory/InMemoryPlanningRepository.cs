@@ -32,6 +32,12 @@ public class InMemoryPlanningRepository : IPlanningRepository
         return Task.CompletedTask;
     }
 
+    public Task ClearAsync()
+    {
+        _store.Clear();
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<PlanningModel>> GetTemplatesAsync()
     {
         IReadOnlyList<PlanningModel> result = _store.Values

@@ -8,5 +8,6 @@ public interface IPlanningRepository
     Task<PlanningModel?> GetByIdAsync(string id);
     Task UpsertAsync(PlanningModel planning);
     Task DeleteAsync(string id);
+    Task ClearAsync();
     Task<IReadOnlyList<PlanningModel>> GetTemplatesAsync();
 }

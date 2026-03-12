@@ -8,6 +8,7 @@ public class ExcelImportService : IExcelImportService
 {
     private readonly IPersonRepository _personRepository;
     private readonly ITaskDefinitionRepository _taskDefinitionRepository;
+    private readonly IPlanningRepository _planningRepository;
 
     private static readonly Dictionary<string, DayOfWeek> DutchDayMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -20,10 +21,11 @@ public class ExcelImportService : IExcelImportService
         ["zondag"] = DayOfWeek.Sunday,
     };
 
-    public ExcelImportService(IPersonRepository personRepository, ITaskDefinitionRepository taskDefinitionRepository)
+    public ExcelImportService(IPersonRepository personRepository, ITaskDefinitionRepository taskDefinitionRepository, IPlanningRepository planningRepository)
     {
         _personRepository = personRepository;
         _taskDefinitionRepository = taskDefinitionRepository;
+        _planningRepository = planningRepository;
     }
 
     public async Task ImportAsync(string filePath)
@@ -44,6 +46,7 @@ public class ExcelImportService : IExcelImportService
     {
         await _personRepository.ClearAsync();
         await _taskDefinitionRepository.ClearAsync();
+        await _planningRepository.ClearAsync();
     }
 
     private async Task ImportFromWorkbookAsync(XLWorkbook workbook)

@@ -9,9 +9,9 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInMemoryInfrastructure(this IServiceCollection services)
     {
-        services.AddSingleton<IPersonRepository, InMemoryPersonRepository>();
-        services.AddSingleton<ITaskDefinitionRepository, InMemoryTaskDefinitionRepository>();
-        services.AddSingleton<IPlanningRepository, InMemoryPlanningRepository>();
+        services.AddScoped<IPersonRepository, InMemoryPersonRepository>();
+        services.AddScoped<ITaskDefinitionRepository, InMemoryTaskDefinitionRepository>();
+        services.AddScoped<IPlanningRepository, InMemoryPlanningRepository>();
         services.AddScoped<IExcelImportService, ExcelImportService>();
         return services;
     }

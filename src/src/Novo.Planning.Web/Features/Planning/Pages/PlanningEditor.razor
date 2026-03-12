@@ -1,5 +1,4 @@
 @page "/planning"
-@rendermode InteractiveServer
 @using Novo.Planning.Domain.Interfaces
 @using Novo.Planning.Infrastructure.Import
 @using Novo.Planning.Web.Features.Planning.Components
@@ -9,6 +8,8 @@
 @inject IPersonRepository PersonRepository
 @inject ITaskDefinitionRepository TaskRepository
 @inject IComplianceValidator ComplianceValidator
+@inject IExcelExportService ExcelExportService
+@inject IPlanningRepository PlanningRepository
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
@@ -218,11 +219,6 @@ else
             return;
         }
 
-        // Default: select all present workers (not on day off), all active tasks
-        _settings.DayOfWeek = DateTime.Today.DayOfWeek;
-        UpdateWorkerSelection();
-        _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
-
         // Detect or create Zeelandia task
         _zeelandiaTask = _allTasks.FirstOrDefault(t => t.Name == ZeelandiaTaskName);
         if (_zeelandiaTask == null)
@@ -241,11 +237,36 @@ else
         // Everyone can do Zeelandia — set all persons to Expert
         foreach (var person in _allPersons)
             person.Skills[ZeelandiaTaskName] = SkillLevel.Expert;
-        // Zeelandia is enabled by default
-        _selectedTaskIds.Add(_zeelandiaTask.Id);
 
-        // Initialize empty planning so the board renders immediately
-        _planning ??= CreateEmptyPlanning();
+        // Restore existing planning from repository (survives navigation)
+        var existing = (await PlanningRepository.GetAllAsync()).FirstOrDefault();
+        if (existing != null)
+        {
+            _planning = existing;
+            // Restore selected tasks from assignments on the board
+            var taskNamesOnBoard = existing.Assignments.Select(a => a.TaskName).ToHashSet();
+            _selectedTaskIds = _allTasks
+                .Where(t => t.IsActive || taskNamesOnBoard.Contains(t.Name))
+                .Select(t => t.Id)
+                .ToHashSet();
+            _selectedTaskIds.Add(_zeelandiaTask.Id);
+            // Restore worker selection from absent workers
+            var absentNames = existing.AbsentWorkers.ToHashSet();
+            _selectedWorkerIds = _allPersons
+                .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+                .Select(p => p.Id)
+                .ToHashSet();
+            RunComplianceCheck();
+        }
+        else
+        {
+            // Fresh session — default selection
+            _settings.DayOfWeek = DateTime.Today.DayOfWeek;
+            UpdateWorkerSelection();
+            _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
+            _selectedTaskIds.Add(_zeelandiaTask.Id);
+            _planning = CreateEmptyPlanning();
+        }
 
         _loading = false;
     }
@@ -631,6 +652,7 @@ else
         _violations = [];
         UpdateWorkerSelection();
         _planning = CreateEmptyPlanning();
+        await PlanningRepository.UpsertAsync(_planning);
         RunComplianceCheck();
     }
 
@@ -658,8 +680,9 @@ else
             if (!confirmed) return;
         }
 
-        await PlanningService.SavePlanningAsync(_planning);
-        await JSRuntime.InvokeVoidAsync("open", $"/api/planning/{_planning.Id}/export", "_blank");
+        var bytes = ExcelExportService.Export(_planning);
+        var base64 = Convert.ToBase64String(bytes);
+        await JSRuntime.InvokeVoidAsync("novoExport.downloadFile", "planning.xlsx", base64);
     }
 
     private void OnTaskRemovedFromBoard(string taskId)
@@ -669,8 +692,10 @@ else
         StateHasChanged();
     }
 
-    private void OnAssignmentChanged()
+    private async Task OnAssignmentChanged()
     {
+        if (_planning != null)
+            await PlanningRepository.UpsertAsync(_planning);
         RunComplianceCheck();
         StateHasChanged();
     }

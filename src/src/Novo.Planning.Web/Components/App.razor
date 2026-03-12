@@ -15,7 +15,7 @@
 </head>
 
 <body>
-    <Routes />
+    <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script>
@@ -179,6 +179,18 @@
                 return;
             }
         });
+    </script>
+    <script>
+        window.novoExport = {
+            downloadFile: function (filename, base64) {
+                var link = document.createElement('a');
+                link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
     </script>
 </body>
 
