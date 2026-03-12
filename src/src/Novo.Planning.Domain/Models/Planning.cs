@@ -3,7 +3,6 @@ namespace Novo.Planning.Domain.Models;
 public class PlanningModel
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
-    public DateOnly Date { get; set; }
     public string DayName { get; set; } = string.Empty;
     public OptimizationStrategy Strategy { get; set; }
     public List<PlanningAssignment> Assignments { get; set; } = [];

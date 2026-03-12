@@ -38,11 +38,6 @@ else
                     <DaySelector Label="Dag" SelectedDay="_settings.DayOfWeek" SelectedDayChanged="OnDayChanged" />
 
                     <div class="mb-3 mt-3">
-                        <label class="form-label">Datum</label>
-                        <input type="date" class="form-control" @bind="_dateValue" />
-                    </div>
-
-                    <div class="mb-3">
                         <label class="form-label">Strategie</label>
                         <select class="form-select" @bind="_settings.Strategy">
                             <option value="@OptimizationStrategy.MaximizeExpertise">Iedereen doet waar hij het beste in is</option>
@@ -185,7 +180,6 @@ else
     private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
 
     private PlanningSettings _settings = new();
-    private DateTime _dateValue = DateTime.Today;
     private List<Person> _allPersons = [];
     private List<TaskDefinition> _allTasks = [];
     private HashSet<string> _selectedWorkerIds = [];
@@ -275,7 +269,6 @@ else
     {
         return new PlanningModel
         {
-            Date = DateOnly.FromDateTime(_dateValue),
             DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
             Strategy = _settings.Strategy,
             Assignments = [],
@@ -402,7 +395,6 @@ else
                 .Select(p => p.Id)
                 .ToList();
             _settings.ActiveTaskIds = _selectedTaskIds.ToList();
-            _settings.Date = DateOnly.FromDateTime(_dateValue);
 
             // Zeelandia: preserve board assignments and exclude from solver
             var zeelandiaAssignments = GetZeelandiaAssignments();
@@ -415,7 +407,6 @@ else
             {
                 _planning = new PlanningModel
                 {
-                    Date = _settings.Date,
                     DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
                     Strategy = _settings.Strategy,
                     Assignments = zeelandiaAssignments.Concat(_solverResult.Assignments).ToList(),
@@ -453,7 +444,6 @@ else
                 .Select(p => p.Id)
                 .ToList();
             _settings.ActiveTaskIds = _selectedTaskIds.ToList();
-            _settings.Date = DateOnly.FromDateTime(_dateValue);
 
             // Zeelandia: exclude from solver validation
             var zeelandiaAssignments = GetZeelandiaAssignments();
@@ -605,7 +595,6 @@ else
 
         _planning = new PlanningModel
         {
-            Date = DateOnly.FromDateTime(_dateValue),
             DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
             Strategy = _settings.Strategy,
             Assignments = zeelandiaAssignments.Concat(assignments).ToList(),
