@@ -4,6 +4,7 @@
 <div class="kanban-board" @onclick="ClearHighlight">
     @if (Planning != null)
     {
+        _assignmentsByTask = null; // invalidate cache each render
         var leftTasks = GetTasksByPosition(BoardPosition.Left);
         var rightTasks = GetTasksByPosition(BoardPosition.Right);
 
@@ -20,7 +21,8 @@
             .Where(a => a.TaskName != ZeelandiaTaskName)
             .Select(a => a.WorkerName).ToHashSet();
         var unassignedCount = AllPersons.Count(p =>
-            p.Id != "temp-worker-template"
+            !p.IsTempWorker
+            && p.Id != WellKnownIds.TempWorkerTemplateId
             && !assignedWorkers.Contains(p.Name)
             && !Planning.AbsentWorkers.Contains(p.Name));
         var errorCount = Violations.Count(v => v.Severity == ViolationSeverity.Error);
@@ -76,7 +78,7 @@
                                   HighlightedTaskName="@HighlightedTaskName"
                                   AllPersons="AllPersons"
                                   IsEditing="@(_editingTaskName == key)"
-                                  OnEditToggle="@(name => { _editingTaskName = _editingTaskName == name ? null : name; })"
+                                  OnEditToggle="ToggleEditingTask"
                                   OnTaskEdited="HandleTaskEdited"
                                   HeadcountOnly="@(key == ZeelandiaTaskName)" />
                 }
@@ -98,7 +100,7 @@
                                   HighlightedTaskName="@HighlightedTaskName"
                                   AllPersons="AllPersons"
                                   IsEditing="@(_editingTaskName == key)"
-                                  OnEditToggle="@(name => { _editingTaskName = _editingTaskName == name ? null : name; })"
+                                  OnEditToggle="ToggleEditingTask"
                                   OnTaskEdited="HandleTaskEdited"
                                   HeadcountOnly="@(key == ZeelandiaTaskName)" />
                 }
@@ -114,14 +116,7 @@
                     var taskName = ct.TaskName;
                     var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
                     var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
-                    var customDef = new TaskDefinition
-                    {
-                        Name = taskName,
-                        HeadcountRequired = ct.HeadcountRequired,
-                        MinWorkersLevel1 = ct.MinWorkersLevel1,
-                        MinWorkersLevel2 = ct.MinWorkersLevel2,
-                        MinWorkersLevel3 = ct.MinWorkersLevel3
-                    };
+                    var customDef = ct.ToTaskDefinition();
                     <div class="col-md-6">
                         <KanbanColumn TaskName="@taskName"
                                       Assignments="@assignments"
@@ -134,7 +129,7 @@
                                       HighlightedTaskName="@HighlightedTaskName"
                                       AllPersons="AllPersons"
                                       IsEditing="@(_editingTaskName == taskName)"
-                                      OnEditToggle="@(name => { _editingTaskName = _editingTaskName == name ? null : name; })"
+                                      OnEditToggle="ToggleEditingTask"
                                       OnTaskEdited="HandleTaskEdited"
                                       HeadcountOnly="true" />
                     </div>
@@ -166,6 +161,7 @@
         <div class="kanban-sticky-pool" @onclick:stopPropagation="true">
             <UnassignedPool @key="@HighlightedTaskName"
                             Planning="Planning" AllPersons="AllPersons"
+                            TempWorkers="TempWorkers"
                             OnMoveAllToAbsent="ConfirmMoveAllToAbsent"
                             OnMoveAllToUnplanned="MoveAllToUnplanned"
                             HighlightedTaskName="@HighlightedTaskName"
@@ -187,12 +183,18 @@
     [Parameter] public EventCallback<TaskDefinition> OnTaskEdited { get; set; }
     [Parameter] public string? HighlightedTaskName { get; set; }
     [Parameter] public EventCallback<string?> OnHighlightChanged { get; set; }
+    [Parameter] public List<Person> TempWorkers { get; set; } = [];
 
-    private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
+    private const string ZeelandiaTaskName = WellKnownIds.ZeelandiaTaskName;
     private string _newCustomTaskName = "";
     private int _newCustomTaskHeadcount = 2;
     private string? _editingTaskName;
     private DotNetObjectReference<KanbanBoard>? _dotNetRef;
+
+    private void ToggleEditingTask(string? name)
+    {
+        _editingTaskName = _editingTaskName == name ? null : name;
+    }
 
     // Undo state (#7)
     private record UndoSnapshot(List<PlanningAssignment> Assignments, List<string> AbsentWorkers);
@@ -221,7 +223,6 @@
         Planning.AbsentWorkers.AddRange(_undoSnapshot.AbsentWorkers);
         _undoSnapshot = null;
         await OnAssignmentChanged.InvokeAsync();
-        StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -350,6 +351,14 @@
     {
         if (Planning == null) return;
 
+        // Temp workers cannot be marked absent
+        var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
+        if (person?.IsTempWorker == true)
+        {
+            await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", "__absent__");
+            return;
+        }
+
         SaveUndoSnapshot();
 
         if (!string.IsNullOrEmpty(sourceTask) && sourceTask != "__absent__")
@@ -372,7 +381,6 @@
         SaveUndoSnapshot();
         Planning.Assignments.RemoveAll(a => a.TaskName == taskName && a.WorkerName == workerName);
         await OnAssignmentChanged.InvokeAsync();
-        StateHasChanged();
     }
 
     private SkillLevel ResolveSkillLevel(Person? person, string taskName)
@@ -398,12 +406,22 @@
 
     private record TaskColumnData(TaskDefinition TaskDef, List<PlanningAssignment> Assignments);
 
+    private Dictionary<string, List<PlanningAssignment>>? _assignmentsByTask;
+
+    private Dictionary<string, List<PlanningAssignment>> GetAssignmentsByTask()
+    {
+        return _assignmentsByTask ??= Planning?.Assignments
+            .GroupBy(a => a.TaskName)
+            .ToDictionary(g => g.Key, g => g.ToList()) ?? [];
+    }
+
     private List<TaskColumnData> GetTasksByPosition(BoardPosition position)
     {
+        var grouped = GetAssignmentsByTask();
         return AllTasks
             .Where(t => t.BoardPosition == position && SelectedTaskIds.Contains(t.Id))
             .OrderBy(t => t.SortOrder)
-            .Select(t => new TaskColumnData(t, Planning?.Assignments.Where(a => a.TaskName == t.Name).ToList() ?? []))
+            .Select(t => new TaskColumnData(t, grouped.GetValueOrDefault(t.Name, [])))
             .ToList();
     }
 
@@ -491,7 +509,8 @@
             .Where(a => a.TaskName != ZeelandiaTaskName)
             .Select(a => a.WorkerName).ToHashSet();
         var unplanned = AllPersons
-            .Where(p => p.Id != "temp-worker-template"
+            .Where(p => !p.IsTempWorker
+                && p.Id != WellKnownIds.TempWorkerTemplateId
                 && !assignedWorkers.Contains(p.Name)
                 && !Planning.AbsentWorkers.Contains(p.Name))
             .Select(p => p.Name)
@@ -581,7 +600,6 @@
         SaveUndoSnapshot();
         Planning.Assignments.RemoveAll(a => a.TaskName == taskName);
         await OnAssignmentChanged.InvokeAsync();
-        StateHasChanged();
     }
 
     private async Task HandleTaskEdited(TaskDefinition editedDef)
@@ -599,8 +617,6 @@
         }
 
         await OnTaskEdited.InvokeAsync(editedDef);
-        await OnAssignmentChanged.InvokeAsync();
-        StateHasChanged();
     }
 
     private async Task AssignWorkerToHighlightedTask(string workerName)

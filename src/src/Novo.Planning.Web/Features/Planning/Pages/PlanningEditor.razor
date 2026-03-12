@@ -48,7 +48,9 @@ else
 
                     <div class="mb-3">
                         <label class="form-label">Uitzendkrachten</label>
-                        <input type="number" class="form-control" min="0" @bind="_settings.TempWorkerCount" />
+                        <input type="number" class="form-control" min="0"
+                               value="@_settings.TempWorkerCount"
+                               @oninput="OnTempWorkerCountChanged" />
                     </div>
 
                     <div class="form-check mb-3">
@@ -159,9 +161,10 @@ else
                     <button class="btn btn-outline-danger" @onclick="Unload">Ander bestand laden</button>
                 </div>
 
-                <KanbanBoard Planning="_planning" AllPersons="_allPersons" AllTasks="_allTasks"
+                <KanbanBoard Planning="_planning" AllPersons="AllPersonsIncludingTemp" AllTasks="_allTasks"
                              SelectedTaskIds="_selectedTaskIds"
-                             DayOffWorkerNames="GetDayOffWorkerNames()"
+                             DayOffWorkerNames="_dayOffWorkerNames"
+                             TempWorkers="_tempWorkers"
                              Violations="_violations"
                              HighlightedTaskName="@_highlightedTaskName"
                              OnHighlightChanged="OnHighlightChanged"
@@ -177,7 +180,7 @@ else
 }
 
 @code {
-    private const string ZeelandiaTaskName = "Laden/lossen Zeelandia";
+    private const string ZeelandiaTaskName = WellKnownIds.ZeelandiaTaskName;
 
     private PlanningSettings _settings = new();
     private List<Person> _allPersons = [];
@@ -198,6 +201,11 @@ else
     // Zeelandia special task
     private TaskDefinition? _zeelandiaTask;
     private bool _zeelandiaEnabled = true;
+    private HashSet<string> _dayOffWorkerNames = [];
+
+    // Temp workers
+    private List<Person> _tempWorkers = [];
+    private List<Person> AllPersonsIncludingTemp => [.._allPersons, .._tempWorkers];
 
     private bool HasAssignments => _planning?.Assignments.Count > 0;
 
@@ -237,6 +245,8 @@ else
         if (existing != null)
         {
             _planning = existing;
+            _settings.TempWorkerCount = existing.TempWorkerCount;
+            RegenerateTempWorkers();
             // Restore selected tasks from assignments on the board
             var taskNamesOnBoard = existing.Assignments.Select(a => a.TaskName).ToHashSet();
             _selectedTaskIds = _allTasks
@@ -247,8 +257,12 @@ else
             // Restore worker selection from absent workers
             var absentNames = existing.AbsentWorkers.ToHashSet();
             _selectedWorkerIds = _allPersons
-                .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+                .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !absentNames.Contains(p.Name))
                 .Select(p => p.Id)
+                .ToHashSet();
+            _dayOffWorkerNames = _allPersons
+                .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && p.DefaultDaysOff.Contains(_settings.DayOfWeek))
+                .Select(p => p.Name)
                 .ToHashSet();
             RunComplianceCheck();
         }
@@ -257,6 +271,7 @@ else
             // Fresh session — default selection
             _settings.DayOfWeek = DateTime.Today.DayOfWeek;
             UpdateWorkerSelection();
+            RegenerateTempWorkers();
             _selectedTaskIds = _allTasks.Where(t => t.IsActive).Select(t => t.Id).ToHashSet();
             _selectedTaskIds.Add(_zeelandiaTask.Id);
             _planning = CreateEmptyPlanning();
@@ -271,9 +286,10 @@ else
         {
             DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
             Strategy = _settings.Strategy,
+            TempWorkerCount = _settings.TempWorkerCount,
             Assignments = [],
             AbsentWorkers = _allPersons
-                .Where(p => p.Id != "temp-worker-template" && !_selectedWorkerIds.Contains(p.Id))
+                .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !_selectedWorkerIds.Contains(p.Id))
                 .Select(p => p.Name)
                 .ToList(),
         };
@@ -289,8 +305,12 @@ else
     private void UpdateWorkerSelection()
     {
         _selectedWorkerIds = _allPersons
-            .Where(p => p.Id != "temp-worker-template" && !p.DefaultDaysOff.Contains(_settings.DayOfWeek))
+            .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !p.DefaultDaysOff.Contains(_settings.DayOfWeek))
             .Select(p => p.Id)
+            .ToHashSet();
+        _dayOffWorkerNames = _allPersons
+            .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && p.DefaultDaysOff.Contains(_settings.DayOfWeek))
+            .Select(p => p.Name)
             .ToHashSet();
     }
 
@@ -298,9 +318,51 @@ else
     {
         if (_planning == null) return;
         _planning.AbsentWorkers = _allPersons
-            .Where(p => p.Id != "temp-worker-template" && !_selectedWorkerIds.Contains(p.Id))
+            .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !_selectedWorkerIds.Contains(p.Id))
             .Select(p => p.Name)
             .ToList();
+    }
+
+    private void RegenerateTempWorkers()
+    {
+        var template = _allPersons.FirstOrDefault(p => p.Id == WellKnownIds.TempWorkerTemplateId);
+        if (template == null || _settings.TempWorkerCount <= 0)
+        {
+            _tempWorkers = [];
+            return;
+        }
+
+        _tempWorkers = Enumerable.Range(1, _settings.TempWorkerCount)
+            .Select(i => new Person
+            {
+                Id = $"{WellKnownIds.TempWorkerIdPrefix}{i}",
+                Name = $"Uitzendkracht {i}",
+                SpeaksDutch = template.SpeaksDutch,
+                SpeaksPolish = template.SpeaksPolish,
+                DefaultDaysOff = [..template.DefaultDaysOff],
+                Skills = new Dictionary<string, SkillLevel>(template.Skills)
+            })
+            .ToList();
+    }
+
+    private void OnTempWorkerCountChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var count) && count >= 0)
+        {
+            var oldCount = _settings.TempWorkerCount;
+            _settings.TempWorkerCount = count;
+            RegenerateTempWorkers();
+
+            // Remove assignments for temp workers that no longer exist
+            if (count < oldCount && _planning != null)
+            {
+                var validTempNames = _tempWorkers.Select(p => p.Name).ToHashSet();
+                _planning.Assignments.RemoveAll(a =>
+                    a.WorkerName.StartsWith("Uitzendkracht ") && !validTempNames.Contains(a.WorkerName));
+                _planning.TempWorkerCount = count;
+                RunComplianceCheck();
+            }
+        }
     }
 
     private string? _highlightedTaskName;
@@ -391,7 +453,7 @@ else
         {
             var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
             _settings.PresentWorkerIds = _allPersons
-                .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+                .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !absentNames.Contains(p.Name))
                 .Select(p => p.Id)
                 .ToList();
             _settings.ActiveTaskIds = _selectedTaskIds.ToList();
@@ -409,6 +471,7 @@ else
                 {
                     DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
                     Strategy = _settings.Strategy,
+                    TempWorkerCount = _settings.TempWorkerCount,
                     Assignments = zeelandiaAssignments.Concat(_solverResult.Assignments).ToList(),
                     Warnings = _solverResult.Warnings,
                     AbsentWorkers = absentNames.ToList(),
@@ -440,7 +503,7 @@ else
         {
             var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
             _settings.PresentWorkerIds = _allPersons
-                .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name))
+                .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !absentNames.Contains(p.Name))
                 .Select(p => p.Id)
                 .ToList();
             _settings.ActiveTaskIds = _selectedTaskIds.ToList();
@@ -485,9 +548,11 @@ else
             .Where(t => _selectedTaskIds.Contains(t.Id) &&
                         !(_zeelandiaEnabled && _zeelandiaTask != null && t.Id == _zeelandiaTask.Id))
             .ToList();
+        // Regular workers first, then temp workers (prefer non-temp)
         var availableWorkers = _allPersons
-            .Where(p => p.Id != "temp-worker-template" && !absentNames.Contains(p.Name)
+            .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !absentNames.Contains(p.Name)
                         && !zeelandiaWorkerNames.Contains(p.Name))
+            .Concat(_tempWorkers.Where(p => !zeelandiaWorkerNames.Contains(p.Name)))
             .ToList();
 
         var rng = new Random();
@@ -505,7 +570,8 @@ else
                     return level != SkillLevel.Cannot;
                 })
                 .Select(w => (Worker: w, Level: w.Skills.GetValueOrDefault(task.Name, SkillLevel.Beginner)))
-                .OrderBy(_ => rng.Next())
+                .OrderBy(c => c.Worker.IsTempWorker ? 1 : 0) // prefer regular workers
+                .ThenBy(_ => rng.Next())
                 .ToList();
         }
 
@@ -536,6 +602,7 @@ else
                 var rest = candidates
                     .Where(c => !assigned.Contains(c.Worker.Name))
                     .OrderBy(c => (int)c.Level)
+                    .ThenBy(c => c.Worker.IsTempWorker ? 1 : 0)
                     .ThenBy(_ => rng.Next())
                     .Take(remaining);
                 foreach (var c in rest)
@@ -571,6 +638,7 @@ else
                             .Where(c => !assigned.Contains(c.Worker.Name) &&
                                         (targetLang ? c.Worker.SpeaksDutch : c.Worker.SpeaksPolish))
                             .OrderBy(c => (int)c.Level)
+                            .ThenBy(c => c.Worker.IsTempWorker ? 1 : 0)
                             .FirstOrDefault();
                         if (swap.Worker != null)
                         {
@@ -597,6 +665,7 @@ else
         {
             DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
             Strategy = _settings.Strategy,
+            TempWorkerCount = _settings.TempWorkerCount,
             Assignments = zeelandiaAssignments.Concat(assignments).ToList(),
             AbsentWorkers = absentNames.ToList(),
         };
@@ -620,14 +689,6 @@ else
             taskAssigned.Add(pick);
             assigned.Add(pick.Worker.Name);
         }
-    }
-
-    private HashSet<string> GetDayOffWorkerNames()
-    {
-        return _allPersons
-            .Where(p => p.Id != "temp-worker-template" && p.DefaultDaysOff.Contains(_settings.DayOfWeek))
-            .Select(p => p.Name)
-            .ToHashSet();
     }
 
     private async Task ResetBoard()
@@ -702,6 +763,8 @@ else
         // Persist regular task changes (custom tasks are in-memory only)
         if (_allTasks.Any(t => t.Id == task.Id))
             await TaskRepository.UpsertAsync(task);
+        if (_planning != null)
+            await PlanningRepository.UpsertAsync(_planning);
         RunComplianceCheck();
         StateHasChanged();
     }
@@ -711,18 +774,8 @@ else
         if (_planning != null)
         {
             var boardTasks = _allTasks.Where(t => _selectedTaskIds.Contains(t.Id)).ToList();
-            foreach (var ct in _planning.CustomTasks)
-            {
-                boardTasks.Add(new TaskDefinition
-                {
-                    Name = ct.TaskName,
-                    HeadcountRequired = ct.HeadcountRequired,
-                    MinWorkersLevel1 = ct.MinWorkersLevel1,
-                    MinWorkersLevel2 = ct.MinWorkersLevel2,
-                    MinWorkersLevel3 = ct.MinWorkersLevel3
-                });
-            }
-            _violations = ComplianceValidator.Validate(_planning, _allPersons, boardTasks);
+            boardTasks.AddRange(_planning.CustomTasks.Select(ct => ct.ToTaskDefinition()));
+            _violations = ComplianceValidator.Validate(_planning, AllPersonsIncludingTemp, boardTasks);
         }
     }
 }

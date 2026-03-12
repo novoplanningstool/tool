@@ -1,10 +1,13 @@
 @if (Planning != null)
 {
     var assignedWorkers = Planning.Assignments
-        .Where(a => a.TaskName != "Laden/lossen Zeelandia")
+        .Where(a => a.TaskName != WellKnownIds.ZeelandiaTaskName)
         .Select(a => a.WorkerName).ToHashSet();
     var unassigned = AllPersons
-        .Where(p => p.Id != "temp-worker-template" && !assignedWorkers.Contains(p.Name) && !Planning.AbsentWorkers.Contains(p.Name))
+        .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !assignedWorkers.Contains(p.Name) && !Planning.AbsentWorkers.Contains(p.Name))
+        .ToList();
+    var unassignedTemp = TempWorkers
+        .Where(p => !assignedWorkers.Contains(p.Name))
         .ToList();
 
     <div class="card mt-3 drop-zone" data-drop-zone="unassigned">
@@ -35,6 +38,31 @@
             }
         </div>
     </div>
+
+    @if (TempWorkers.Count > 0)
+    {
+        <div class="card mt-2 drop-zone" data-drop-zone="unassigned">
+            <div class="card-header py-1" style="background-color: #e67e22; color: white;">
+                <strong>Uitzendkrachten</strong>
+                <span class="badge bg-light text-dark ms-1">@unassignedTemp.Count / @TempWorkers.Count</span>
+            </div>
+            <div class="card-body p-2" style="min-height: 40px;">
+                @foreach (var person in unassignedTemp)
+                {
+                    <span class="badge @GetBadgeClass(person) me-1 mb-1"
+                          draggable="true"
+                          data-drag-worker="@person.Name"
+                          data-drag-source=""
+                          @ondblclick="() => OnWorkerDoubleClick.InvokeAsync(person.Name)"
+                          @ondblclick:stopPropagation="true"
+                          style="cursor: grab; font-size: 0.85rem;">
+                        @if (person.SpeaksPolish) {<span class="fi fi-pl flag-icon"></span>}
+                        @person.Name
+                    </span>
+                }
+            </div>
+        </div>
+    }
 
     <div class="card mt-2 drop-zone" data-drop-zone="absent">
         <div class="card-header py-1 d-flex justify-content-between align-items-center" style="background-color: #a0522d; color: white;">
@@ -68,6 +96,7 @@
 @code {
     [Parameter] public PlanningModel? Planning { get; set; }
     [Parameter] public List<Person> AllPersons { get; set; } = [];
+    [Parameter] public List<Person> TempWorkers { get; set; } = [];
     [Parameter] public EventCallback OnMoveAllToAbsent { get; set; }
     [Parameter] public EventCallback OnMoveAllToUnplanned { get; set; }
     [Parameter] public string? HighlightedTaskName { get; set; }

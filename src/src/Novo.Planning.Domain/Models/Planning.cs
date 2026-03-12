@@ -12,5 +12,6 @@ public class PlanningModel
     public List<string> Warnings { get; set; } = [];
     public bool IsTemplate { get; set; }
     public string? TemplateName { get; set; }
+    public int TempWorkerCount { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

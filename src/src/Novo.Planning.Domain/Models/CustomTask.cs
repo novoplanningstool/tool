@@ -8,4 +8,13 @@ public class CustomTask
     public int MinWorkersLevel2 { get; set; }
     public int MinWorkersLevel3 { get; set; }
     public List<string> AssignedWorkers { get; set; } = [];
+
+    public TaskDefinition ToTaskDefinition() => new()
+    {
+        Name = TaskName,
+        HeadcountRequired = HeadcountRequired,
+        MinWorkersLevel1 = MinWorkersLevel1,
+        MinWorkersLevel2 = MinWorkersLevel2,
+        MinWorkersLevel3 = MinWorkersLevel3
+    };
 }

@@ -6,7 +6,7 @@ namespace Novo.Planning.Web.Features.Planning.Services;
 
 public class PlanningService : IPlanningService
 {
-    private const string TempWorkerTemplateId = "temp-worker-template";
+    private const string TempWorkerTemplateId = WellKnownIds.TempWorkerTemplateId;
 
     private readonly IPersonRepository _personRepository;
     private readonly ITaskDefinitionRepository _taskRepository;
@@ -58,7 +58,7 @@ public class PlanningService : IPlanningService
                 {
                     var tempWorker = new Person
                     {
-                        Id = $"temp-worker-{i}",
+                        Id = $"{WellKnownIds.TempWorkerIdPrefix}{i}",
                         Name = $"Uitzendkracht {i}",
                         SpeaksDutch = template.SpeaksDutch,
                         SpeaksPolish = template.SpeaksPolish,

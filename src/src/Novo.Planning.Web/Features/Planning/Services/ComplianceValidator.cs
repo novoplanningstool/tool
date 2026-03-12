@@ -194,7 +194,8 @@ public class ComplianceValidator : IComplianceValidator
         var absentNames = planning.AbsentWorkers.ToHashSet();
 
         var unassigned = persons
-            .Where(p => p.Id != "temp-worker-template"
+            .Where(p => !p.IsTempWorker
+                        && p.Id != WellKnownIds.TempWorkerTemplateId
                         && !absentNames.Contains(p.Name)
                         && !assignmentsByWorker.ContainsKey(p.Name))
             .Select(p => p.Name)

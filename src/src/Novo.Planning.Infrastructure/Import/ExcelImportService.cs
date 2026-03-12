@@ -44,9 +44,10 @@ public class ExcelImportService : IExcelImportService
 
     public async Task UnloadAsync()
     {
-        await _personRepository.ClearAsync();
-        await _taskDefinitionRepository.ClearAsync();
-        await _planningRepository.ClearAsync();
+        await Task.WhenAll(
+            _personRepository.ClearAsync(),
+            _taskDefinitionRepository.ClearAsync(),
+            _planningRepository.ClearAsync());
     }
 
     private async Task ImportFromWorkbookAsync(XLWorkbook workbook)
@@ -156,7 +157,7 @@ public class ExcelImportService : IExcelImportService
 
         return new Person
         {
-            Id = "temp-worker-template",
+            Id = WellKnownIds.TempWorkerTemplateId,
             Name = "Uitzendkracht",
             SpeaksDutch = GetIntValue(dataRow, headers, "Nederlands") == 1,
             SpeaksPolish = GetIntValue(dataRow, headers, "Pools") == 1,

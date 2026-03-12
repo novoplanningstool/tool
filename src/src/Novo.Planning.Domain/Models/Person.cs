@@ -8,4 +8,5 @@ public class Person
     public bool SpeaksPolish { get; set; }
     public HashSet<DayOfWeek> DefaultDaysOff { get; set; } = [];
     public Dictionary<string, SkillLevel> Skills { get; set; } = [];
+    public bool IsTempWorker => Id.StartsWith(WellKnownIds.TempWorkerIdPrefix) && Id != WellKnownIds.TempWorkerTemplateId;
 }

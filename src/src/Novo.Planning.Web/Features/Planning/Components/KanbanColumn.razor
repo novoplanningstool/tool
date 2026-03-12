@@ -160,17 +160,25 @@
     private int _editLevel1
     {
         get => _editLevel1Backing;
-        set { var delta = Math.Max(0, value) - _editLevel1Backing; _editLevel1Backing = Math.Max(0, value); _editHeadcount = Math.Max(1, _editHeadcount + delta); }
+        set => SetEditLevel(ref _editLevel1Backing, value);
     }
     private int _editLevel2
     {
         get => _editLevel2Backing;
-        set { var delta = Math.Max(0, value) - _editLevel2Backing; _editLevel2Backing = Math.Max(0, value); _editHeadcount = Math.Max(1, _editHeadcount + delta); }
+        set => SetEditLevel(ref _editLevel2Backing, value);
     }
     private int _editLevel3
     {
         get => _editLevel3Backing;
-        set { var delta = Math.Max(0, value) - _editLevel3Backing; _editLevel3Backing = Math.Max(0, value); _editHeadcount = Math.Max(1, _editHeadcount + delta); }
+        set => SetEditLevel(ref _editLevel3Backing, value);
+    }
+
+    private void SetEditLevel(ref int backing, int value)
+    {
+        var clamped = Math.Max(0, value);
+        var delta = clamped - backing;
+        backing = clamped;
+        _editHeadcount = Math.Max(1, _editHeadcount + delta);
     }
 
     private bool IsHighlighted => HighlightedTaskName == TaskName;
