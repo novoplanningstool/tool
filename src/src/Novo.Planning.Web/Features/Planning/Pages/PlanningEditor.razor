@@ -677,6 +677,8 @@ else
     private void OnTaskRemovedFromBoard(string taskId)
     {
         _selectedTaskIds.Remove(taskId);
+        if (_zeelandiaTask != null && taskId == _zeelandiaTask.Id)
+            _zeelandiaEnabled = false;
         RunComplianceCheck();
         StateHasChanged();
     }
