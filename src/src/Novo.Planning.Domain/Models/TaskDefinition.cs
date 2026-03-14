@@ -13,4 +13,5 @@ public class TaskDefinition
     public SkillLevel RestLevel { get; set; } = SkillLevel.Beginner;
     public bool RequiresLanguageCollaboration { get; set; }
     public int SortOrder { get; set; }
+    public bool DividerAbove { get; set; }
 }

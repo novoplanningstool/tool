@@ -5,8 +5,7 @@
     @if (Planning != null)
     {
         _assignmentsByTask = null; // invalidate cache each render
-        var leftTasks = GetTasksByPosition(BoardPosition.Left);
-        var rightTasks = GetTasksByPosition(BoardPosition.Right);
+        var allBoardTasks = GetAllBoardTasks();
 
         @* Pre-group violations by task name for O(1) lookup *@
         var violationsByTask = Violations
@@ -15,8 +14,8 @@
             .ToDictionary(g => g.Key, g => g.ToList());
 
         @* Planning progress summary *@
-        var totalTasks = leftTasks.Count + rightTasks.Count;
-        var completeTasks = CountCompleteTasks(leftTasks, rightTasks);
+        var totalTasks = allBoardTasks.Count;
+        var completeTasks = allBoardTasks.Count(IsTaskComplete);
         var assignedWorkers = Planning.Assignments
             .Where(a => a.TaskName != ZeelandiaTaskName)
             .Select(a => a.WorkerName).ToHashSet();
@@ -60,84 +59,76 @@
             <span class="badge bg-danger text-white me-1">Kan niet</span>
         </div>
 
-        <div class="row">
-            <div class="col-md-6 drop-zone" data-drop-side="left">
-                <h5 style="color: #59B6AD;">Links</h5>
-                @foreach (var entry in leftTasks)
+        <div class="task-list">
+            @{ var taskIndex = 0; }
+            @foreach (var entry in allBoardTasks)
+            {
+                var key = entry.TaskDef.Name;
+                var taskViolations = violationsByTask.GetValueOrDefault(key, []);
+
+                @if (entry.TaskDef.DividerAbove && taskIndex > 0)
                 {
-                    var key = entry.TaskDef.Name;
-                    var taskViolations = violationsByTask.GetValueOrDefault(key, []);
-                    <KanbanColumn TaskName="@key"
-                                  Assignments="@entry.Assignments"
-                                  TaskDef="@entry.TaskDef"
-                                  Violations="@taskViolations"
-                                  OnRemove="@(() => ConfirmRemoveTaskFromBoard(key))"
-                                  OnHeaderClick="@(() => ToggleHighlight(key))"
-                                  OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
-                                  OnClearAll="@(() => ClearAllFromTask(key))"
-                                  HighlightedTaskName="@HighlightedTaskName"
-                                  AllPersons="AllPersons"
-                                  IsEditing="@(_editingTaskName == key)"
-                                  OnEditToggle="ToggleEditingTask"
-                                  OnTaskEdited="HandleTaskEdited"
-                                  HeadcountOnly="@(key == ZeelandiaTaskName)"
-                                  OnTempWorkerRenamed="OnTempWorkerRenamed" />
+                    <div class="board-divider d-flex align-items-center my-2" @onclick:stopPropagation="true">
+                        <div class="divider-line flex-grow-1"></div>
+                        <button class="btn btn-sm divider-remove-btn"
+                                @onclick="() => RemoveDivider(key)"
+                                title="Scheidingslijn verwijderen">&times;</button>
+                        <div class="divider-line flex-grow-1"></div>
+                    </div>
                 }
-            </div>
-            <div class="col-md-6 drop-zone" data-drop-side="right">
-                <h5 style="color: #59B6AD;">Rechts</h5>
-                @foreach (var entry in rightTasks)
+                else if (taskIndex > 0)
                 {
-                    var key = entry.TaskDef.Name;
-                    var taskViolations = violationsByTask.GetValueOrDefault(key, []);
-                    <KanbanColumn TaskName="@key"
-                                  Assignments="@entry.Assignments"
-                                  TaskDef="@entry.TaskDef"
-                                  Violations="@taskViolations"
-                                  OnRemove="@(() => ConfirmRemoveTaskFromBoard(key))"
-                                  OnHeaderClick="@(() => ToggleHighlight(key))"
-                                  OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
-                                  OnClearAll="@(() => ClearAllFromTask(key))"
-                                  HighlightedTaskName="@HighlightedTaskName"
-                                  AllPersons="AllPersons"
-                                  IsEditing="@(_editingTaskName == key)"
-                                  OnEditToggle="ToggleEditingTask"
-                                  OnTaskEdited="HandleTaskEdited"
-                                  HeadcountOnly="@(key == ZeelandiaTaskName)"
-                                  OnTempWorkerRenamed="OnTempWorkerRenamed" />
+                    <div class="divider-insert-zone" @onclick="() => AddDivider(key)" @onclick:stopPropagation="true"
+                         title="Scheidingslijn toevoegen">
+                        <span class="divider-insert-icon">+</span>
+                    </div>
                 }
-            </div>
+
+                <KanbanColumn TaskName="@key"
+                              Assignments="@entry.Assignments"
+                              TaskDef="@entry.TaskDef"
+                              Violations="@taskViolations"
+                              OnRemove="@(() => ConfirmRemoveTaskFromBoard(key))"
+                              OnHeaderClick="@(() => ToggleHighlight(key))"
+                              OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
+                              OnClearAll="@(() => ClearAllFromTask(key))"
+                              HighlightedTaskName="@HighlightedTaskName"
+                              AllPersons="AllPersons"
+                              IsEditing="@(_editingTaskName == key)"
+                              OnEditToggle="ToggleEditingTask"
+                              OnTaskEdited="HandleTaskEdited"
+                              HeadcountOnly="@(key == ZeelandiaTaskName)"
+                              OnTempWorkerRenamed="OnTempWorkerRenamed" />
+
+                taskIndex++;
+            }
         </div>
 
         @if (Planning.CustomTasks.Count > 0)
         {
             <h5 class="mt-3" style="color: #59B6AD;">Aangepaste taken</h5>
-            <div class="row">
-                @foreach (var ct in Planning.CustomTasks)
-                {
-                    var taskName = ct.TaskName;
-                    var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
-                    var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
-                    var customDef = ct.ToTaskDefinition();
-                    <div class="col-md-6">
-                        <KanbanColumn TaskName="@taskName"
-                                      Assignments="@assignments"
-                                      TaskDef="@customDef"
-                                      Violations="@taskViolations"
-                                      OnRemove="@(() => ConfirmRemoveCustomTask(taskName))"
-                                      OnHeaderClick="@(() => ToggleHighlight(taskName))"
-                                      OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
-                                      OnClearAll="@(() => ClearAllFromTask(taskName))"
-                                      HighlightedTaskName="@HighlightedTaskName"
-                                      AllPersons="AllPersons"
-                                      IsEditing="@(_editingTaskName == taskName)"
-                                      OnEditToggle="ToggleEditingTask"
-                                      OnTaskEdited="HandleTaskEdited"
-                                      HeadcountOnly="true"
-                                      OnTempWorkerRenamed="OnTempWorkerRenamed" />
-                    </div>
-                }
-            </div>
+            @foreach (var ct in Planning.CustomTasks)
+            {
+                var taskName = ct.TaskName;
+                var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
+                var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
+                var customDef = ct.ToTaskDefinition();
+                <KanbanColumn TaskName="@taskName"
+                              Assignments="@assignments"
+                              TaskDef="@customDef"
+                              Violations="@taskViolations"
+                              OnRemove="@(() => ConfirmRemoveCustomTask(taskName))"
+                              OnHeaderClick="@(() => ToggleHighlight(taskName))"
+                              OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
+                              OnClearAll="@(() => ClearAllFromTask(taskName))"
+                              HighlightedTaskName="@HighlightedTaskName"
+                              AllPersons="AllPersons"
+                              IsEditing="@(_editingTaskName == taskName)"
+                              OnEditToggle="ToggleEditingTask"
+                              OnTaskEdited="HandleTaskEdited"
+                              HeadcountOnly="true"
+                              OnTempWorkerRenamed="OnTempWorkerRenamed" />
+            }
         }
 
         <div class="input-group mt-2 mb-3" style="max-width: 500px;"
@@ -315,25 +306,6 @@
     }
 
     [JSInvokable]
-    public async Task OnDropColumnOnSide(string draggedColumnName, string side)
-    {
-        var targetSide = side == "right" ? BoardPosition.Right : BoardPosition.Left;
-
-        var dragged = AllTasks.FirstOrDefault(t => t.Name == draggedColumnName && SelectedTaskIds.Contains(t.Id));
-        if (dragged == null || dragged.BoardPosition == targetSide) return;
-
-        var targetSiblings = AllTasks
-            .Where(t => t.BoardPosition == targetSide && SelectedTaskIds.Contains(t.Id))
-            .ToList();
-
-        dragged.BoardPosition = targetSide;
-        dragged.SortOrder = targetSiblings.Count > 0 ? targetSiblings.Max(t => t.SortOrder) + 1 : 0;
-
-        await OnTaskMoved.InvokeAsync(dragged);
-        StateHasChanged();
-    }
-
-    [JSInvokable]
     public async Task OnDropUnassigned(string workerName, string? sourceTask)
     {
         if (Planning == null) return;
@@ -420,19 +392,14 @@
             .ToDictionary(g => g.Key, g => g.ToList()) ?? [];
     }
 
-    private List<TaskColumnData> GetTasksByPosition(BoardPosition position)
+    private List<TaskColumnData> GetAllBoardTasks()
     {
         var grouped = GetAssignmentsByTask();
         return AllTasks
-            .Where(t => t.BoardPosition == position && SelectedTaskIds.Contains(t.Id))
+            .Where(t => SelectedTaskIds.Contains(t.Id))
             .OrderBy(t => t.SortOrder)
             .Select(t => new TaskColumnData(t, grouped.GetValueOrDefault(t.Name, [])))
             .ToList();
-    }
-
-    private int CountCompleteTasks(List<TaskColumnData> left, List<TaskColumnData> right)
-    {
-        return left.Concat(right).Count(IsTaskComplete);
     }
 
     private static bool IsTaskComplete(TaskColumnData entry)
@@ -461,10 +428,8 @@
         var target = AllTasks.FirstOrDefault(t => t.Name == targetName && SelectedTaskIds.Contains(t.Id));
         if (dragged == null || target == null) return;
 
-        dragged.BoardPosition = target.BoardPosition;
-
         var siblings = AllTasks
-            .Where(t => t.BoardPosition == target.BoardPosition && SelectedTaskIds.Contains(t.Id) && t.Id != dragged.Id)
+            .Where(t => SelectedTaskIds.Contains(t.Id) && t.Id != dragged.Id)
             .OrderBy(t => t.SortOrder)
             .ToList();
 
@@ -622,6 +587,22 @@
         }
 
         await OnTaskEdited.InvokeAsync(editedDef);
+    }
+
+    private async Task AddDivider(string taskName)
+    {
+        var task = AllTasks.FirstOrDefault(t => t.Name == taskName);
+        if (task == null) return;
+        task.DividerAbove = true;
+        await OnTaskMoved.InvokeAsync(task);
+    }
+
+    private async Task RemoveDivider(string taskName)
+    {
+        var task = AllTasks.FirstOrDefault(t => t.Name == taskName);
+        if (task == null) return;
+        task.DividerAbove = false;
+        await OnTaskMoved.InvokeAsync(task);
     }
 
     private async Task AssignWorkerToHighlightedTask(string workerName)

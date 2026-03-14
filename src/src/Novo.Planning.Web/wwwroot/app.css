@@ -1,17 +1,86 @@
+/* ============================================================
+   NOVO Planning — Refined Industrial Design System
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    /* Brand */
+    --novo-teal: #4CA69D;
+    --novo-teal-dark: #3A8A82;
+    --novo-teal-light: #E6F3F1;
+    --novo-teal-subtle: #F0F9F8;
+
+    /* Status */
+    --novo-success: #2D9F5B;
+    --novo-success-light: #E8F5ED;
+    --novo-warning: #E8920D;
+    --novo-warning-light: #FFF6E5;
+    --novo-error: #D1374A;
+    --novo-error-light: #FCEDEF;
+
+    /* Neutral */
+    --novo-gray-50: #FAFBFC;
+    --novo-gray-100: #F3F4F6;
+    --novo-gray-200: #E5E7EB;
+    --novo-gray-300: #D1D5DB;
+    --novo-gray-400: #9CA3AF;
+    --novo-gray-500: #6B7280;
+    --novo-gray-600: #4B5563;
+    --novo-gray-700: #374151;
+    --novo-gray-800: #1F2937;
+
+    /* Zones */
+    --novo-absent: #92400E;
+    --novo-absent-light: #FEF3C7;
+    --novo-temp: #C2410C;
+    --novo-temp-light: #FFF7ED;
+
+    /* Typography */
+    --font-body: 'Outfit', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Spacing */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Global font override */
+body, .form-control, .form-select, .btn, .badge, .card, .alert, .nav-link {
+    font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-body);
+    font-weight: 600;
+    color: var(--novo-gray-800);
+    letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   Validation & error states
+   ============================================================ */
+
 h1:focus {
     outline: none;
 }
 
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid var(--novo-success);
 }
 
 .invalid {
-    outline: 1px solid #e50000;
+    outline: 1px solid var(--novo-error);
 }
 
 .validation-message {
-    color: #e50000;
+    color: var(--novo-error);
 }
 
 .blazor-error-boundary {
@@ -20,67 +89,93 @@ h1:focus {
     color: white;
 }
 
-    .blazor-error-boundary::after {
-        content: "An error has occurred."
-    }
-
-.darker-border-checkbox.form-check-input {
-    border-color: #929292;
+.blazor-error-boundary::after {
+    content: "An error has occurred."
 }
 
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+/* ============================================================
+   Form controls refinement
+   ============================================================ */
+
+.darker-border-checkbox.form-check-input {
+    border-color: var(--novo-gray-400);
+}
+
+.form-floating > .form-control-plaintext::placeholder,
+.form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);
     text-align: end;
 }
 
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+.form-floating > .form-control-plaintext:focus::placeholder,
+.form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--novo-teal);
+    box-shadow: 0 0 0 2px rgba(76, 166, 157, 0.15);
 }
 
 /* Requirement indicator badge for unmet requirements */
 .bg-outline-req {
     background: transparent;
-    color: #dc3545;
-    border: 1px solid #dc3545;
+    color: var(--novo-error);
+    border: 1px solid var(--novo-error);
 }
 
-/* Legend */
+/* ============================================================
+   Skill legend
+   ============================================================ */
+
 .skill-legend {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    padding: 6px 10px;
+    background: var(--novo-gray-50);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--novo-gray-200);
 }
 
-/* Sticky unassigned/absent pool */
+/* ============================================================
+   Sticky unassigned/absent pool
+   ============================================================ */
+
 .kanban-sticky-pool {
     position: sticky;
     bottom: 0;
     z-index: 10;
-    background: white;
-    padding-top: 4px;
-    border-top: 2px solid #dee2e6;
+    background: var(--novo-gray-50);
+    padding: 8px 0 4px;
+    border-top: 3px solid var(--novo-teal);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
 }
 
-/* Drag-and-drop visual feedback */
+/* ============================================================
+   Drag-and-drop visual feedback
+   ============================================================ */
+
+.task-row.drag-over,
 .kanban-column.drag-over {
-    box-shadow: inset 0 0 0 2px #59B6AD;
+    box-shadow: inset 0 0 0 2px var(--novo-teal), var(--shadow-md);
 }
 
 .drop-zone.drag-over {
-    box-shadow: inset 0 0 0 2px #6c757d;
+    box-shadow: inset 0 0 0 2px var(--novo-gray-500);
 }
 
 /* Drop rejection flash */
 @keyframes flash-red {
     0%, 100% { box-shadow: none; }
-    50% { box-shadow: inset 0 0 0 3px #dc3545; }
+    50% { box-shadow: inset 0 0 0 3px var(--novo-error); }
 }
 
 .drop-rejected {
     animation: flash-red 0.5s;
 }
 
-/* Drop success flash (#1) */
+/* Drop success flash */
 @keyframes flash-green {
-    0% { box-shadow: inset 0 0 0 3px #28a745; }
+    0% { box-shadow: inset 0 0 0 3px var(--novo-success); }
     100% { box-shadow: none; }
 }
 
@@ -88,120 +183,150 @@ h1:focus {
     animation: flash-green 0.6s ease-out;
 }
 
-/* Task card status borders */
+/* ============================================================
+   Task card status borders
+   ============================================================ */
+
+.task-row.status-ok,
 .kanban-column.status-ok {
-    border-left: 4px solid #28a745;
+    border-left: 4px solid var(--novo-success);
 }
 
+.task-row.status-warning,
 .kanban-column.status-warning {
-    border-left: 4px solid #fd7e14;
+    border-left: 4px solid var(--novo-warning);
 }
 
+.task-row.status-error,
 .kanban-column.status-error {
-    border-left: 4px solid #dc3545;
+    border-left: 4px solid var(--novo-error);
 }
 
-/* Hover states (#3) */
-.kanban-column > .card-header:hover {
-    filter: brightness(0.92);
-    transition: filter 0.15s;
-}
+/* ============================================================
+   Hover & interaction states
+   ============================================================ */
 
 .kanban-card:hover,
 [data-drag-worker]:hover {
-    filter: brightness(0.88);
-    transition: filter 0.15s;
+    filter: brightness(0.9);
+    transition: filter 0.15s ease;
 }
 
 .kanban-card-remove:hover {
     opacity: 1;
-    transform: scale(1.2);
-    transition: all 0.1s;
+    transform: scale(1.15);
+    transition: all 0.12s ease;
 }
 
-/* Drag handle indicator (#6) */
+/* ============================================================
+   Drag handle
+   ============================================================ */
+
 .drag-handle {
-    opacity: 0.5;
-    font-size: 0.75rem;
+    opacity: 0.45;
+    font-size: 0.8rem;
     margin-right: 6px;
     letter-spacing: -1px;
+    transition: opacity 0.15s;
 }
 
 .kanban-column > .card-header:hover .drag-handle {
-    opacity: 0.9;
+    opacity: 0.95;
 }
 
-/* Planning progress bar */
+/* ============================================================
+   Planning progress bar
+   ============================================================ */
+
 .planning-progress {
-    font-size: 0.85rem;
-    padding: 6px 12px;
-    border-radius: 4px;
+    font-size: 0.84rem;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
     font-weight: 500;
+    letter-spacing: -0.01em;
+    border: 1px solid transparent;
 }
 
 .planning-progress.progress-complete {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: var(--novo-success-light);
+    color: #166534;
+    border-color: rgba(45, 159, 91, 0.2);
 }
 
 .planning-progress.progress-in-progress {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: var(--novo-warning-light);
+    color: #92400E;
+    border-color: rgba(232, 146, 13, 0.2);
 }
 
 .planning-progress.progress-errors {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: var(--novo-error-light);
+    color: #991B1B;
+    border-color: rgba(209, 55, 74, 0.2);
 }
 
-/* Slot badge styles (#4 improved) */
+/* ============================================================
+   Slot badge styles (skill requirements)
+   ============================================================ */
+
 .slot-badge {
     display: inline-block;
-    font-size: 0.78rem;
-    padding: 2px 6px;
-    border-radius: 3px;
-    margin-right: 3px;
+    font-size: 0.76rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    margin-right: 4px;
     font-weight: 500;
+    letter-spacing: -0.01em;
 }
 
 .slot-badge.slot-ok {
-    background-color: #28a745;
+    background-color: var(--novo-success);
     color: white;
 }
 
 .slot-badge.slot-needed {
     background: transparent;
-    color: #dc3545;
-    border: 1px solid #dc3545;
+    color: var(--novo-error);
+    border: 1.5px solid var(--novo-error);
     font-weight: 600;
 }
 
-/* Task progress bar (#10) */
+/* ============================================================
+   Task progress bar
+   ============================================================ */
+
 .task-progress-bar {
-    height: 4px;
-    background: #e9ecef;
-    border-radius: 2px;
+    height: 5px;
+    background: var(--novo-gray-200);
+    border-radius: 3px;
     overflow: hidden;
-    margin-top: 4px;
+    margin-top: 5px;
 }
 
 .task-progress-fill {
     height: 100%;
-    border-radius: 2px;
-    transition: width 0.3s ease;
+    border-radius: 3px;
+    transition: width 0.35s ease;
 }
 
-/* Worker card remove button */
+/* ============================================================
+   Worker card remove button
+   ============================================================ */
+
 .kanban-card-remove {
-    margin-left: 3px;
+    margin-left: 4px;
     cursor: pointer;
-    opacity: 0.6;
+    opacity: 0.5;
     font-size: 1rem;
     line-height: 1;
     vertical-align: middle;
+    transition: all 0.12s;
 }
 
-/* Polish flag icon alignment */
+/* ============================================================
+   Polish flag icon alignment
+   ============================================================ */
+
 .flag-icon {
     font-size: 0.75em;
     vertical-align: middle;
@@ -210,48 +335,265 @@ h1:focus {
     top: -1px;
 }
 
-/* Undo button (#7) */
+/* ============================================================
+   Undo button
+   ============================================================ */
+
 .undo-btn {
     font-size: 0.8rem;
-    padding: 2px 10px;
+    padding: 3px 12px;
     opacity: 0.85;
     transition: opacity 0.15s;
+    border-radius: var(--radius-sm);
 }
 
 .undo-btn:hover {
     opacity: 1;
 }
 
-/* Bulk action buttons (#13) */
+/* ============================================================
+   Bulk action buttons
+   ============================================================ */
+
 .bulk-actions {
     display: flex;
-    gap: 2px;
+    gap: 3px;
     margin-top: 2px;
 }
 
 .bulk-btn {
-    font-size: 0.7rem;
-    padding: 1px 6px;
-    border-radius: 3px;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    border: 1px solid rgba(255,255,255,0.4);
-    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.1);
     color: white;
-    opacity: 0.7;
-    transition: opacity 0.15s;
+    opacity: 0.75;
+    transition: all 0.15s ease;
+    font-weight: 500;
 }
 
 .bulk-btn:hover {
     opacity: 1;
-    background: rgba(255,255,255,0.15);
+    background: rgba(255, 255, 255, 0.22);
 }
 
-/* Kanban column positioning for popover */
+/* ============================================================
+   Board dividers
+   ============================================================ */
+
+.board-divider {
+    padding: 10px 0;
+}
+
+.divider-line {
+    height: 4px;
+    background: linear-gradient(90deg, var(--novo-teal), var(--novo-teal-dark));
+    border-radius: 2px;
+    box-shadow: 0 1px 4px rgba(76, 166, 157, 0.35);
+}
+
+.divider-remove-btn {
+    font-size: 0.85rem;
+    line-height: 1;
+    padding: 3px 8px;
+    color: white;
+    background: var(--novo-teal);
+    border: 2px solid white;
+    border-radius: 50%;
+    opacity: 0.8;
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.divider-remove-btn:hover {
+    opacity: 1;
+    background: var(--novo-error);
+    transform: scale(1.1);
+}
+
+/* Divider insert zone */
+.divider-insert-zone {
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+}
+
+.divider-insert-zone::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--novo-gray-200);
+    border-radius: 1px;
+    transition: all 0.2s ease;
+}
+
+.divider-insert-zone:hover::before {
+    background: var(--novo-teal);
+    height: 3px;
+    box-shadow: 0 0 6px rgba(76, 166, 157, 0.3);
+}
+
+.divider-insert-icon {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--novo-gray-400);
+    background: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--novo-gray-200);
+    position: relative;
+    z-index: 1;
+    transition: all 0.2s ease;
+}
+
+.divider-insert-zone:hover .divider-insert-icon {
+    background: var(--novo-teal);
+    color: white;
+    border-color: var(--novo-teal);
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(76, 166, 157, 0.3);
+}
+
+/* ============================================================
+   Task row — compact horizontal layout
+   ============================================================ */
+
+.task-row {
+    display: grid;
+    grid-template-columns: 185px 1fr 200px;
+    align-items: center;
+    border: 1.5px solid var(--novo-gray-300);
+    border-radius: var(--radius-sm);
+    background: white;
+    min-height: 36px;
+    position: relative;
+    transition: box-shadow 0.15s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.task-row:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.task-row-name {
+    padding: 5px 10px;
+    align-self: stretch;
+    font-size: 0.82rem;
+    cursor: grab;
+    background: var(--novo-teal);
+    color: white;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s;
+}
+
+.task-row-name.highlighted {
+    background: var(--novo-teal-dark);
+}
+
+.task-row-name:hover {
+    filter: brightness(0.93);
+}
+
+.task-row-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+
+.task-row-workers {
+    flex: 1;
+    padding: 3px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    min-height: 32px;
+    align-items: center;
+    align-content: center;
+}
+
+.task-row-status {
+    padding: 4px 6px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.76rem;
+    white-space: nowrap;
+    border-left: 1px solid var(--novo-gray-200);
+    background: var(--novo-gray-50);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.status-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.status-count.met {
+    color: var(--novo-success);
+}
+
+.status-count.unmet {
+    color: var(--novo-error);
+}
+
+.task-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+}
+
+.row-action-btn {
+    font-size: 0.75rem;
+    padding: 1px 5px;
+    border: 1px solid var(--novo-gray-300);
+    border-radius: 3px;
+    background: white;
+    color: var(--novo-gray-500);
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.12s;
+    line-height: 1.2;
+}
+
+.row-action-btn:hover {
+    opacity: 1;
+    background: var(--novo-gray-100);
+    color: var(--novo-gray-700);
+}
+
+.row-action-btn.remove:hover {
+    color: var(--novo-error);
+    border-color: var(--novo-error);
+}
+
+/* Legacy compat */
 .kanban-column {
     position: relative;
 }
 
-/* Inline task edit popover */
+/* ============================================================
+   Inline task edit popover
+   ============================================================ */
+
 .task-edit-popover {
     position: absolute;
     top: 100%;
@@ -259,34 +601,125 @@ h1:focus {
     right: 0;
     z-index: 20;
     background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 0 0 4px 4px;
-    padding: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    font-size: 0.8rem;
+    border: 1px solid var(--novo-gray-200);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    padding: 10px;
+    box-shadow: var(--shadow-lg);
+    font-size: 0.82rem;
+    max-width: 300px;
 }
 
 .task-edit-popover label {
     font-weight: 500;
     margin-bottom: 0;
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--novo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
-/* Edit pencil button */
+/* ============================================================
+   Edit pencil button
+   ============================================================ */
+
 .edit-btn {
     font-size: 0.85rem;
-    padding: 1px 5px;
-    border: 1px solid rgba(255,255,255,0.5);
-    border-radius: 3px;
-    background: rgba(255,255,255,0.15);
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.12);
     color: white;
-    opacity: 0.85;
+    opacity: 0.8;
     cursor: pointer;
-    transition: opacity 0.15s, background 0.15s;
+    transition: all 0.15s ease;
 }
 
 .edit-btn:hover {
     opacity: 1;
-    background: rgba(255,255,255,0.3);
+    background: rgba(255, 255, 255, 0.28);
+}
+
+/* ============================================================
+   Badge refinements (Bootstrap overrides)
+   ============================================================ */
+
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+/* Worker badges on the board */
+.kanban-card.badge,
+[data-drag-worker].badge {
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    font-weight: 500;
+    font-size: 0.78rem;
+    transition: filter 0.15s ease;
+}
+
+/* ============================================================
+   Card refinements (Bootstrap overrides)
+   ============================================================ */
+
+.card {
+    border-radius: var(--radius-md);
+    border-color: var(--novo-gray-200);
+    box-shadow: var(--shadow-sm);
+}
+
+.card-header {
+    font-weight: 600;
+    font-size: 0.88rem;
+    letter-spacing: -0.01em;
+    border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+/* ============================================================
+   Button refinements
+   ============================================================ */
+
+.btn {
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    letter-spacing: -0.01em;
+    transition: all 0.15s ease;
+}
+
+.btn-info {
+    background-color: var(--novo-teal);
+    border-color: var(--novo-teal);
+}
+
+.btn-info:hover {
+    background-color: var(--novo-teal-dark);
+    border-color: var(--novo-teal-dark);
+}
+
+/* ============================================================
+   Alert refinements
+   ============================================================ */
+
+.alert {
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+}
+
+/* ============================================================
+   Task list container
+   ============================================================ */
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* ============================================================
+   Mono font for counts/numbers
+   ============================================================ */
+
+.task-progress-bar + div,
+.slot-badge {
+    font-variant-numeric: tabular-nums;
 }

@@ -71,7 +71,7 @@
 
         // Allow dropping on valid targets
         document.addEventListener('dragover', function (e) {
-            if (e.target.closest('[data-drop-task], [data-drop-zone], [data-drop-side]')) {
+            if (e.target.closest('[data-drop-task], [data-drop-zone]')) {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
             }
@@ -166,18 +166,6 @@
                 return;
             }
 
-            // 3. Drop on a side container (column reorder across sides)
-            var sideEl = target.closest('[data-drop-side]');
-            if (sideEl) {
-                e.preventDefault();
-                var side = sideEl.getAttribute('data-drop-side');
-
-                if (dd._column) {
-                    dd._dotNetRef.invokeMethodAsync('OnDropColumnOnSide', dd._column, side);
-                }
-                dd._worker = null; dd._source = null; dd._column = null;
-                return;
-            }
         });
     </script>
     <script>

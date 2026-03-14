@@ -1,37 +1,81 @@
 @{
     var skillCounts = GetSkillCounts();
     var statusClass = GetStatusClass(skillCounts);
+    var headcountMet = TaskDef != null && Assignments.Count >= TaskDef.HeadcountRequired;
+    var experts = skillCounts.GetValueOrDefault(SkillLevel.Expert);
+    var experienced = skillCounts.GetValueOrDefault(SkillLevel.Experienced);
+    var beginners = skillCounts.GetValueOrDefault(SkillLevel.Beginner);
 }
-<div class="kanban-column card mb-2 @statusClass"
+<div class="task-row @statusClass"
      data-drop-task="@TaskName"
      @onclick:stopPropagation="true">
-    <div class="card-header d-flex justify-content-between align-items-center py-1 pe-2"
+    <div class="task-row-name @(IsHighlighted ? "highlighted" : "")"
          draggable="true"
          data-drag-column="@TaskName"
-         style="background-color: @(IsHighlighted ? "#3d8a82" : "#59B6AD"); color: white; cursor: grab;"
          @onclick="OnHeaderClick">
-        <div class="d-flex align-items-center">
-            <span class="drag-handle">&#9776;</span>
-            <strong>@TaskName</strong>
-        </div>
-        <div class="d-flex align-items-center gap-1">
+        <span class="drag-handle">&#9776;</span>
+        <strong class="task-row-label">@TaskName</strong>
+    </div>
+    <div class="task-row-workers">
+        @foreach (var assignment in Assignments)
+        {
+            <KanbanCard Assignment="assignment" AllPersons="AllPersons" HighlightedTaskName="@HighlightedTaskName"
+                        OnRemove="@(() => OnWorkerRemoved.InvokeAsync(assignment.WorkerName))"
+                        OnTempWorkerRenamed="OnTempWorkerRenamed" />
+        }
+    </div>
+    <div class="task-row-status">
+        @if (TaskDef != null)
+        {
+            <span class="status-count @(headcountMet ? "met" : "unmet")"
+                  title="@Assignments.Count van @TaskDef.HeadcountRequired mensen">
+                @Assignments.Count/@TaskDef.HeadcountRequired
+                @(headcountMet ? "✓" : "")
+            </span>
+            @if (TaskDef.MinWorkersLevel1 > 0)
+            {
+                var met = experts >= TaskDef.MinWorkersLevel1;
+                <span class="slot-badge @(met ? "slot-ok" : "slot-needed")"
+                      title="Min. @TaskDef.MinWorkersLevel1 Expert vereist">
+                    E:@experts/@TaskDef.MinWorkersLevel1
+                </span>
+            }
+            @if (TaskDef.MinWorkersLevel2 > 0)
+            {
+                var level2Have = experts + experienced;
+                var met = level2Have >= TaskDef.MinWorkersLevel2;
+                <span class="slot-badge @(met ? "slot-ok" : "slot-needed")"
+                      title="Min. @TaskDef.MinWorkersLevel2 Ervaren+ vereist">
+                    V:@level2Have/@TaskDef.MinWorkersLevel2
+                </span>
+            }
+            @if (TaskDef.MinWorkersLevel3 > 0)
+            {
+                var level3Have = experts + experienced + beginners;
+                var met = level3Have >= TaskDef.MinWorkersLevel3;
+                <span class="slot-badge @(met ? "slot-ok" : "slot-needed")"
+                      title="Min. @TaskDef.MinWorkersLevel3 Beginner+ vereist">
+                    B:@level3Have/@TaskDef.MinWorkersLevel3
+                </span>
+            }
+        }
+        <span class="task-row-actions">
             @if (Assignments.Count > 0 && OnClearAll.HasDelegate)
             {
-                <button class="bulk-btn" @onclick="OnClearAll" @onclick:stopPropagation="true"
+                <button class="row-action-btn" @onclick="OnClearAll" @onclick:stopPropagation="true"
                         title="Alle medewerkers loskoppelen">Leeg</button>
             }
             @if (OnTaskEdited.HasDelegate)
             {
-                <button class="edit-btn" @onclick="ToggleEdit" @onclick:stopPropagation="true"
+                <button class="row-action-btn" @onclick="ToggleEdit" @onclick:stopPropagation="true"
                         title="Taak bewerken">&#9998;</button>
             }
-            <span class="badge bg-light text-dark">@Assignments.Count</span>
             @if (OnRemove.HasDelegate)
             {
-                <button class="btn btn-sm text-white p-0 ms-1" style="line-height: 1; font-size: 0.9rem; opacity: 0.8;"
-                        @onclick="OnRemove" @onclick:stopPropagation="true" title="Verwijder van bord">&#215;</button>
+                <button class="row-action-btn remove" @onclick="OnRemove" @onclick:stopPropagation="true"
+                        title="Verwijder van bord">&#215;</button>
             }
-        </div>
+        </span>
     </div>
     @if (IsEditing && TaskDef != null)
     {
@@ -58,82 +102,6 @@
             <button class="btn btn-sm btn-primary mt-1" @onclick="SaveEdit">Opslaan</button>
         </div>
     }
-    @if (TaskDef != null)
-    {
-        <div class="card-body p-1 border-bottom" style="font-size: 0.8rem; background: #f8f9fa;">
-            @{
-                var experts = skillCounts.GetValueOrDefault(SkillLevel.Expert);
-                var experienced = skillCounts.GetValueOrDefault(SkillLevel.Experienced);
-                var beginners = skillCounts.GetValueOrDefault(SkillLevel.Beginner);
-                var headcountMet = Assignments.Count >= TaskDef.HeadcountRequired;
-                var hasLevelReqs = TaskDef.MinWorkersLevel1 > 0 || TaskDef.MinWorkersLevel2 > 0 || TaskDef.MinWorkersLevel3 > 0;
-                var progressPct = TaskDef.HeadcountRequired > 0
-                    ? Math.Min(100, (int)(100.0 * Assignments.Count / TaskDef.HeadcountRequired))
-                    : 100;
-                var barColor = headcountMet ? "#28a745" : (progressPct > 50 ? "#fd7e14" : "#dc3545");
-            }
-            @* Headcount + progress bar *@
-            <div>
-                <span class="@(headcountMet ? "text-success fw-bold" : "text-danger fw-bold")">
-                    @Assignments.Count/@TaskDef.HeadcountRequired mensen
-                    @(headcountMet ? "✓" : $"— nog {TaskDef.HeadcountRequired - Assignments.Count} nodig")
-                </span>
-                <div class="task-progress-bar">
-                    <div class="task-progress-fill" style="width: @(progressPct)%; background: @barColor;"></div>
-                </div>
-            </div>
-            @if (hasLevelReqs)
-            {
-                <div class="mt-1">
-                    @if (TaskDef.MinWorkersLevel1 > 0)
-                    {
-                        var met = experts >= TaskDef.MinWorkersLevel1;
-                        <span class="slot-badge @(met ? "slot-ok" : "slot-needed")" title="Min. @TaskDef.MinWorkersLevel1 Expert vereist">
-                            Expert: @experts/@TaskDef.MinWorkersLevel1 @(met ? "✓" : $"— nog {TaskDef.MinWorkersLevel1 - experts}")
-                        </span>
-                    }
-                    @if (TaskDef.MinWorkersLevel2 > 0)
-                    {
-                        var level2Have = experts + experienced;
-                        var met = level2Have >= TaskDef.MinWorkersLevel2;
-                        <span class="slot-badge @(met ? "slot-ok" : "slot-needed")" title="Min. @TaskDef.MinWorkersLevel2 Expert of Ervaren vereist">
-                            Ervaren+: @level2Have/@TaskDef.MinWorkersLevel2 @(met ? "✓" : $"— nog {TaskDef.MinWorkersLevel2 - level2Have}")
-                        </span>
-                    }
-                    @if (TaskDef.MinWorkersLevel3 > 0)
-                    {
-                        var level3Have = experts + experienced + beginners;
-                        var met = level3Have >= TaskDef.MinWorkersLevel3;
-                        <span class="slot-badge @(met ? "slot-ok" : "slot-needed")" title="Min. @TaskDef.MinWorkersLevel3 Expert, Ervaren of Beginner vereist">
-                            Beginner+: @level3Have/@TaskDef.MinWorkersLevel3 @(met ? "✓" : $"— nog {TaskDef.MinWorkersLevel3 - level3Have}")
-                        </span>
-                    }
-                    @{
-                        var minSlots = TaskDef.MinWorkersLevel1 + TaskDef.MinWorkersLevel2 + TaskDef.MinWorkersLevel3;
-                        var remainingSlots = TaskDef.HeadcountRequired - minSlots;
-                    }
-                    @if (remainingSlots > 0)
-                    {
-                        var totalAssigned = Assignments.Count;
-                        var filledMinSlots = Math.Min(totalAssigned, minSlots);
-                        var overigFilled = Math.Max(0, totalAssigned - filledMinSlots);
-                        var overigMet = overigFilled >= remainingSlots;
-                        <span class="slot-badge @(overigMet ? "slot-ok" : "slot-needed")" title="Overige plekken">
-                            Overig: @overigFilled/@remainingSlots @(overigMet ? "✓" : $"— nog {remainingSlots - overigFilled}")
-                        </span>
-                    }
-                </div>
-            }
-        </div>
-    }
-    <div class="card-body p-2" style="min-height: 40px;">
-        @foreach (var assignment in Assignments)
-        {
-            <KanbanCard Assignment="assignment" AllPersons="AllPersons" HighlightedTaskName="@HighlightedTaskName"
-                        OnRemove="@(() => OnWorkerRemoved.InvokeAsync(assignment.WorkerName))"
-                        OnTempWorkerRenamed="OnTempWorkerRenamed" />
-        }
-    </div>
 </div>
 
 @code {

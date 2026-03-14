@@ -109,6 +109,11 @@ public class ExcelImportService : IExcelImportService
             tasks.Add(task);
         }
 
+        // Place a divider above the first Right-side task (preserves the old left/right split)
+        var firstRight = tasks.FirstOrDefault(t => t.BoardPosition == BoardPosition.Right);
+        if (firstRight != null)
+            firstRight.DividerAbove = true;
+
         return tasks;
     }
 

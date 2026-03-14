@@ -37,13 +37,8 @@ public class ExcelExportService : IExcelExportService
             .GroupBy(a => a.TaskName)
             .ToDictionary(g => g.Key, g => g.Select(a => a.WorkerName).ToList());
 
-        var leftTasks = tasks
-            .Where(t => t.BoardPosition == BoardPosition.Left && assignmentsByTask.ContainsKey(t.Name))
-            .OrderBy(t => t.SortOrder)
-            .ToList();
-
-        var rightTasks = tasks
-            .Where(t => t.BoardPosition == BoardPosition.Right && assignmentsByTask.ContainsKey(t.Name))
+        var orderedTasks = tasks
+            .Where(t => assignmentsByTask.ContainsKey(t.Name))
             .OrderBy(t => t.SortOrder)
             .ToList();
 
@@ -128,14 +123,12 @@ public class ExcelExportService : IExcelExportService
         // ============================================================
         var dataEntries = new List<(string? TaskName, List<string> Workers, bool IsSeparator)>();
 
-        foreach (var t in leftTasks)
+        foreach (var t in orderedTasks)
+        {
+            if (t.DividerAbove && dataEntries.Count > 0)
+                dataEntries.Add((null, [], true)); // separator row
             dataEntries.Add((t.Name, assignmentsByTask.GetValueOrDefault(t.Name, []), false));
-
-        if (leftTasks.Count > 0 && rightTasks.Count > 0)
-            dataEntries.Add((null, [], true)); // separator
-
-        foreach (var t in rightTasks)
-            dataEntries.Add((t.Name, assignmentsByTask.GetValueOrDefault(t.Name, []), false));
+        }
 
         // Total rows = enough for tasks and all absent workers
         var totalRows = Math.Max(dataEntries.Count, planning.AbsentWorkers.Count);
