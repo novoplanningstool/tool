@@ -558,7 +558,7 @@ h1:focus {
     display: flex;
     align-items: center;
     gap: 2px;
-    margin-left: 4px;
+    margin-left: auto;
 }
 
 .row-action-btn {

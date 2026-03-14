@@ -30,7 +30,6 @@
             <span class="status-count @(headcountMet ? "met" : "unmet")"
                   title="@Assignments.Count van @TaskDef.HeadcountRequired mensen">
                 @Assignments.Count/@TaskDef.HeadcountRequired
-                @(headcountMet ? "✓" : "")
             </span>
             @if (TaskDef.MinWorkersLevel1 > 0)
             {
