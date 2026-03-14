@@ -130,7 +130,8 @@
         @foreach (var assignment in Assignments)
         {
             <KanbanCard Assignment="assignment" AllPersons="AllPersons" HighlightedTaskName="@HighlightedTaskName"
-                        OnRemove="@(() => OnWorkerRemoved.InvokeAsync(assignment.WorkerName))" />
+                        OnRemove="@(() => OnWorkerRemoved.InvokeAsync(assignment.WorkerName))"
+                        OnTempWorkerRenamed="OnTempWorkerRenamed" />
         }
     </div>
 </div>
@@ -150,6 +151,7 @@
     [Parameter] public EventCallback<string?> OnEditToggle { get; set; }
     [Parameter] public EventCallback<TaskDefinition> OnTaskEdited { get; set; }
     [Parameter] public bool HeadcountOnly { get; set; }
+    [Parameter] public EventCallback<(string OldName, string NewName)> OnTempWorkerRenamed { get; set; }
 
     private int _editHeadcount;
     private int _editLevel1Backing;

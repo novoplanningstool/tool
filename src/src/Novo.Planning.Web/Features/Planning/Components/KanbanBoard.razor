@@ -80,7 +80,8 @@
                                   IsEditing="@(_editingTaskName == key)"
                                   OnEditToggle="ToggleEditingTask"
                                   OnTaskEdited="HandleTaskEdited"
-                                  HeadcountOnly="@(key == ZeelandiaTaskName)" />
+                                  HeadcountOnly="@(key == ZeelandiaTaskName)"
+                                  OnTempWorkerRenamed="OnTempWorkerRenamed" />
                 }
             </div>
             <div class="col-md-6 drop-zone" data-drop-side="right">
@@ -102,7 +103,8 @@
                                   IsEditing="@(_editingTaskName == key)"
                                   OnEditToggle="ToggleEditingTask"
                                   OnTaskEdited="HandleTaskEdited"
-                                  HeadcountOnly="@(key == ZeelandiaTaskName)" />
+                                  HeadcountOnly="@(key == ZeelandiaTaskName)"
+                                  OnTempWorkerRenamed="OnTempWorkerRenamed" />
                 }
             </div>
         </div>
@@ -131,7 +133,8 @@
                                       IsEditing="@(_editingTaskName == taskName)"
                                       OnEditToggle="ToggleEditingTask"
                                       OnTaskEdited="HandleTaskEdited"
-                                      HeadcountOnly="true" />
+                                      HeadcountOnly="true"
+                                      OnTempWorkerRenamed="OnTempWorkerRenamed" />
                     </div>
                 }
             </div>
@@ -165,7 +168,8 @@
                             OnMoveAllToAbsent="ConfirmMoveAllToAbsent"
                             OnMoveAllToUnplanned="MoveAllToUnplanned"
                             HighlightedTaskName="@HighlightedTaskName"
-                            OnWorkerDoubleClick="AssignWorkerToHighlightedTask" />
+                            OnWorkerDoubleClick="AssignWorkerToHighlightedTask"
+                            OnTempWorkerRenamed="OnTempWorkerRenamed" />
         </div>
     }
 </div>
@@ -184,6 +188,7 @@
     [Parameter] public string? HighlightedTaskName { get; set; }
     [Parameter] public EventCallback<string?> OnHighlightChanged { get; set; }
     [Parameter] public List<Person> TempWorkers { get; set; } = [];
+    [Parameter] public EventCallback<(string OldName, string NewName)> OnTempWorkerRenamed { get; set; }
 
     private const string ZeelandiaTaskName = WellKnownIds.ZeelandiaTaskName;
     private string _newCustomTaskName = "";

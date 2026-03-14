@@ -1,24 +1,72 @@
-<div class="kanban-card badge @GetBadgeClass() me-1 mb-1"
-     draggable="true"
-     data-drag-worker="@Assignment.WorkerName"
-     data-drag-source="@Assignment.TaskName"
-     style="cursor: grab; font-size: 0.85rem;">
-    @if (IsPolishSpeaker()) {<span class="fi fi-pl flag-icon"></span>}
-    @Assignment.WorkerName
-    @if (OnRemove.HasDelegate)
-    {
-        <span class="kanban-card-remove" @onclick="OnRemove" @onclick:stopPropagation="true" title="Verwijder van taak">&times;</span>
-    }
-</div>
+@if (_isEditing)
+{
+    <div class="kanban-card badge bg-light text-dark me-1 mb-1 d-inline-flex align-items-center" style="font-size: 0.85rem;">
+        <input type="text" class="form-control form-control-sm p-0 border-0"
+               style="width: 120px; font-size: 0.8rem; background: transparent;"
+               @bind="_editName"
+               @bind:event="oninput"
+               @onkeydown="HandleEditKeyDown"
+               @onblur="CommitRename" />
+    </div>
+}
+else
+{
+    <div class="kanban-card badge @GetBadgeClass() me-1 mb-1"
+         draggable="true"
+         data-drag-worker="@Assignment.WorkerName"
+         data-drag-source="@Assignment.TaskName"
+         style="cursor: grab; font-size: 0.85rem;">
+        @if (IsPolishSpeaker()) {<span class="fi fi-pl flag-icon"></span>}
+        @Assignment.WorkerName
+        @if (IsTempWorker() && OnTempWorkerRenamed.HasDelegate)
+        {
+            <span class="kanban-card-edit" @onclick="StartEditing" @onclick:stopPropagation="true"
+                  title="Naam wijzigen" style="cursor: pointer; margin-left: 4px; opacity: 0.7;">&#9998;</span>
+        }
+        @if (OnRemove.HasDelegate)
+        {
+            <span class="kanban-card-remove" @onclick="OnRemove" @onclick:stopPropagation="true" title="Verwijder van taak">&times;</span>
+        }
+    </div>
+}
 
 @code {
     [Parameter] public PlanningAssignment Assignment { get; set; } = default!;
     [Parameter] public List<Person> AllPersons { get; set; } = [];
     [Parameter] public string? HighlightedTaskName { get; set; }
     [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback<(string OldName, string NewName)> OnTempWorkerRenamed { get; set; }
+
+    private bool _isEditing;
+    private string _editName = "";
 
     private bool IsOnHighlightedTask => HighlightedTaskName == Assignment.TaskName;
     private bool IsOnDifferentTask => !string.IsNullOrEmpty(HighlightedTaskName) && !IsOnHighlightedTask;
+
+    private bool IsTempWorker() =>
+        AllPersons.FirstOrDefault(p => p.Name == Assignment.WorkerName)?.IsTempWorker == true;
+
+    private void StartEditing()
+    {
+        _editName = Assignment.WorkerName;
+        _isEditing = true;
+    }
+
+    private async Task HandleEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CommitRename();
+        else if (e.Key == "Escape") _isEditing = false;
+    }
+
+    private async Task CommitRename()
+    {
+        _isEditing = false;
+        var newName = _editName.Trim();
+        if (!string.IsNullOrEmpty(newName) && newName != Assignment.WorkerName)
+        {
+            await OnTempWorkerRenamed.InvokeAsync((Assignment.WorkerName, newName));
+        }
+    }
 
     private SkillLevel GetDisplaySkillLevel()
     {

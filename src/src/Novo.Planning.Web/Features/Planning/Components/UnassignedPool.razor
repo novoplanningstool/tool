@@ -49,16 +49,35 @@
             <div class="card-body p-2" style="min-height: 40px;">
                 @foreach (var person in unassignedTemp)
                 {
-                    <span class="badge @GetBadgeClass(person) me-1 mb-1"
-                          draggable="true"
-                          data-drag-worker="@person.Name"
-                          data-drag-source=""
-                          @ondblclick="() => OnWorkerDoubleClick.InvokeAsync(person.Name)"
-                          @ondblclick:stopPropagation="true"
-                          style="cursor: grab; font-size: 0.85rem;">
-                        @if (person.SpeaksPolish) {<span class="fi fi-pl flag-icon"></span>}
-                        @person.Name
-                    </span>
+                    @if (_editingTempWorkerName == person.Name)
+                    {
+                        <span class="badge bg-light text-dark me-1 mb-1 d-inline-flex align-items-center" style="font-size: 0.85rem;">
+                            <input type="text" class="form-control form-control-sm p-0 border-0"
+                                   style="width: 120px; font-size: 0.8rem; background: transparent;"
+                                   @bind="_editName"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleTempEditKeyDown"
+                                   @onblur="CommitTempRename" />
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge @GetBadgeClass(person) me-1 mb-1"
+                              draggable="true"
+                              data-drag-worker="@person.Name"
+                              data-drag-source=""
+                              @ondblclick="() => OnWorkerDoubleClick.InvokeAsync(person.Name)"
+                              @ondblclick:stopPropagation="true"
+                              style="cursor: grab; font-size: 0.85rem;">
+                            @if (person.SpeaksPolish) {<span class="fi fi-pl flag-icon"></span>}
+                            @person.Name
+                            @if (OnTempWorkerRenamed.HasDelegate)
+                            {
+                                <span @onclick="() => StartTempEditing(person.Name)" @onclick:stopPropagation="true"
+                                      title="Naam wijzigen" style="cursor: pointer; margin-left: 4px; opacity: 0.7;">&#9998;</span>
+                            }
+                        </span>
+                    }
                 }
             </div>
         </div>
@@ -101,6 +120,33 @@
     [Parameter] public EventCallback OnMoveAllToUnplanned { get; set; }
     [Parameter] public string? HighlightedTaskName { get; set; }
     [Parameter] public EventCallback<string> OnWorkerDoubleClick { get; set; }
+    [Parameter] public EventCallback<(string OldName, string NewName)> OnTempWorkerRenamed { get; set; }
+
+    private string? _editingTempWorkerName;
+    private string _editName = "";
+
+    private void StartTempEditing(string name)
+    {
+        _editingTempWorkerName = name;
+        _editName = name;
+    }
+
+    private async Task HandleTempEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CommitTempRename();
+        else if (e.Key == "Escape") _editingTempWorkerName = null;
+    }
+
+    private async Task CommitTempRename()
+    {
+        var oldName = _editingTempWorkerName;
+        _editingTempWorkerName = null;
+        var newName = _editName.Trim();
+        if (!string.IsNullOrEmpty(oldName) && !string.IsNullOrEmpty(newName) && newName != oldName)
+        {
+            await OnTempWorkerRenamed.InvokeAsync((oldName, newName));
+        }
+    }
 
     private SkillLevel GetSkillForTask(Person person)
     {

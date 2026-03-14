@@ -171,7 +171,8 @@ else
                              OnAssignmentChanged="OnAssignmentChanged"
                              OnTaskRemoved="OnTaskRemovedFromBoard"
                              OnTaskMoved="OnTaskMoved"
-                             OnTaskEdited="OnTaskEdited" />
+                             OnTaskEdited="OnTaskEdited"
+                             OnTempWorkerRenamed="OnTempWorkerRenamed" />
 
                 <CompliancePanel Violations="_violations" />
             }
@@ -332,15 +333,22 @@ else
             return;
         }
 
+        var existingById = _tempWorkers.ToDictionary(p => p.Id);
         _tempWorkers = Enumerable.Range(1, _settings.TempWorkerCount)
-            .Select(i => new Person
+            .Select(i =>
             {
-                Id = $"{WellKnownIds.TempWorkerIdPrefix}{i}",
-                Name = $"Uitzendkracht {i}",
-                SpeaksDutch = template.SpeaksDutch,
-                SpeaksPolish = template.SpeaksPolish,
-                DefaultDaysOff = [..template.DefaultDaysOff],
-                Skills = new Dictionary<string, SkillLevel>(template.Skills)
+                var id = $"{WellKnownIds.TempWorkerIdPrefix}{i}";
+                if (existingById.TryGetValue(id, out var existing))
+                    return existing;
+                return new Person
+                {
+                    Id = id,
+                    Name = $"Uitzendkracht {i}",
+                    SpeaksDutch = template.SpeaksDutch,
+                    SpeaksPolish = template.SpeaksPolish,
+                    DefaultDaysOff = [..template.DefaultDaysOff],
+                    Skills = new Dictionary<string, SkillLevel>(template.Skills)
+                };
             })
             .ToList();
     }
@@ -350,6 +358,7 @@ else
         if (int.TryParse(e.Value?.ToString(), out var count) && count >= 0)
         {
             var oldCount = _settings.TempWorkerCount;
+            var oldTempNames = _tempWorkers.Select(p => p.Name).ToHashSet();
             _settings.TempWorkerCount = count;
             RegenerateTempWorkers();
 
@@ -358,9 +367,25 @@ else
             {
                 var validTempNames = _tempWorkers.Select(p => p.Name).ToHashSet();
                 _planning.Assignments.RemoveAll(a =>
-                    a.WorkerName.StartsWith("Uitzendkracht ") && !validTempNames.Contains(a.WorkerName));
+                    oldTempNames.Contains(a.WorkerName) && !validTempNames.Contains(a.WorkerName));
                 _planning.TempWorkerCount = count;
                 RunComplianceCheck();
+            }
+        }
+    }
+
+    private void OnTempWorkerRenamed((string OldName, string NewName) args)
+    {
+        var worker = _tempWorkers.FirstOrDefault(p => p.Name == args.OldName);
+        if (worker == null) return;
+
+        worker.Name = args.NewName;
+
+        if (_planning != null)
+        {
+            foreach (var assignment in _planning.Assignments.Where(a => a.WorkerName == args.OldName))
+            {
+                assignment.WorkerName = args.NewName;
             }
         }
     }
