@@ -137,21 +137,21 @@ public class ExcelExportService : IExcelExportService
         // ============================================================
         // Build data: tasks chunked into rows of 5 workers each
         // ============================================================
-        var dataEntries = new List<(string? TaskName, List<string> Workers, bool IsSeparator, bool IsFirstRow)>();
+        var dataEntries = new List<DataEntry>();
         const int workersPerRow = ColWorkersEnd - ColWorkersStart + 1; // 5
 
         foreach (var t in orderedTasks)
         {
             if (t.DividerAbove && dataEntries.Count > 0)
-                dataEntries.Add((null, [], true, false));
+                dataEntries.Add(DataEntry.Separator);
 
             var workers = assignmentsByTask.GetValueOrDefault(t.Name, []);
             var chunks = workers.Chunk(workersPerRow).ToList();
             if (chunks.Count == 0)
-                chunks.Add([]); // ensure at least one row
+                chunks.Add([]);
 
             for (int c = 0; c < chunks.Count; c++)
-                dataEntries.Add((t.Name, chunks[c].ToList(), false, c == 0));
+                dataEntries.Add(new DataEntry(t.Name, chunks[c], false, c == 0, c == 0 ? chunks.Count : 0));
         }
 
         // Total rows = enough for tasks and all absent workers
@@ -169,7 +169,8 @@ public class ExcelExportService : IExcelExportService
         {
             var r = dataStartRow + i;
             var hasEntry = i < dataEntries.Count;
-            var isSep = hasEntry && dataEntries[i].IsSeparator;
+            var entry = hasEntry ? dataEntries[i] : null;
+            var isSep = entry?.IsSeparator == true;
 
             if (isSep)
             {
@@ -184,34 +185,32 @@ public class ExcelExportService : IExcelExportService
                 continue;
             }
 
-            var isFirst = hasEntry && dataEntries[i].IsFirstRow;
-            if (isFirst || !hasEntry) colorIndex++;
+            var isFirst = entry?.IsFirstRow == true;
+            if (isFirst || entry == null) colorIndex++;
             var rowBg = colorIndex % 2 == 0 ? XLColor.White : GrayColor;
 
-            var workers = hasEntry ? dataEntries[i].Workers : [];
+            var workers = entry?.Workers ?? [];
 
             // Fill row A-H with alternating color
             for (int c = ColTaken; c <= ColBijzH; c++)
                 ws.Cell(r, c).Style.Fill.BackgroundColor = rowBg;
 
             // Col A: Taken — only on first row, merged across continuation rows
-            if (isFirst && hasEntry)
+            if (isFirst && entry != null)
             {
-                var rowSpan = 1;
-                for (int j = i + 1; j < dataEntries.Count && !dataEntries[j].IsFirstRow && !dataEntries[j].IsSeparator; j++)
-                    rowSpan++;
+                var rowSpan = entry.RowSpan;
 
                 if (rowSpan > 1)
                     ws.Range(r, ColTaken, r + rowSpan - 1, ColTaken).Merge();
 
-                ws.Cell(r, ColTaken).Value = dataEntries[i].TaskName;
+                ws.Cell(r, ColTaken).Value = entry.TaskName;
                 ws.Cell(r, ColTaken).Style.Font.Bold = true;
                 ws.Cell(r, ColTaken).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 ws.Cell(r, ColTaken).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
                 OuterBorder(ws.Range(r, ColTaken, r + rowSpan - 1, ColTaken));
             }
-            else if (!hasEntry)
+            else if (entry == null)
             {
                 OuterBorder(ws.Range(r, ColTaken, r, ColTaken));
             }
@@ -276,6 +275,11 @@ public class ExcelExportService : IExcelExportService
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
+    }
+
+    private sealed record DataEntry(string? TaskName, IReadOnlyList<string> Workers, bool IsSeparator, bool IsFirstRow, int RowSpan)
+    {
+        public static readonly DataEntry Separator = new(null, [], true, false, 0);
     }
 
     private static void OuterBorder(IXLRange range)
