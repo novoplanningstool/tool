@@ -299,6 +299,8 @@ else
     private void OnDayChanged(DayOfWeek day)
     {
         _settings.DayOfWeek = day;
+        if (_planning != null)
+            _planning.DayName = DaySelector.ToDutchName(day);
         UpdateWorkerSelection();
         SyncAbsentWorkers();
     }

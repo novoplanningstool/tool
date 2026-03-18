@@ -69,15 +69,31 @@ public class ExcelExportService : IExcelExportService
         }
 
         // ============================================================
-        // 2. Day name — rows 3-4 merged, columns D-E
+        // 2. Day name — or frikandellen image on Friday
         // ============================================================
-        var dayRange = ws.Range(3, 4, 4, 5); // D3:E4
-        dayRange.Merge();
-        ws.Cell(3, 4).Value = planning.DayName;
-        ws.Cell(3, 4).Style.Font.FontSize = 28;
-        ws.Cell(3, 4).Style.Font.Bold = true;
-        dayRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-        dayRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        if (planning.DayName.Equals("Vrijdag", StringComparison.OrdinalIgnoreCase))
+        {
+            var fridayImagePath = Path.Combine(_environment.WebRootPath, "frikandellen.png");
+            if (File.Exists(fridayImagePath))
+            {
+                var picture = ws.AddPicture(fridayImagePath);
+                picture.MoveTo(ws.Cell(1, 4), 0, 0);
+                picture.Scale(0.5);
+            }
+            ws.Cell(5, 4).Value = "Frikandellen-Vrijdag";
+            ws.Cell(5, 4).Style.Font.Bold = true;
+            ws.Cell(5, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        }
+        else
+        {
+            var dayRange = ws.Range(3, 4, 4, 5); // D3:E4
+            dayRange.Merge();
+            ws.Cell(3, 4).Value = planning.DayName;
+            ws.Cell(3, 4).Style.Font.FontSize = 28;
+            ws.Cell(3, 4).Style.Font.Bold = true;
+            dayRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            dayRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        }
 
         // ============================================================
         // 3. Row 6 — headers: black bold text on colored backgrounds
