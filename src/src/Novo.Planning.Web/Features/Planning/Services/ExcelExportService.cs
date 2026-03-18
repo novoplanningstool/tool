@@ -135,15 +135,23 @@ public class ExcelExportService : IExcelExportService
         OuterBorder(ws.Range(6, ColAfwezig, 6, ColAfwezig));
 
         // ============================================================
-        // Build data: left tasks, separator, right tasks
+        // Build data: tasks chunked into rows of 5 workers each
         // ============================================================
-        var dataEntries = new List<(string? TaskName, List<string> Workers, bool IsSeparator)>();
+        var dataEntries = new List<(string? TaskName, List<string> Workers, bool IsSeparator, bool IsFirstRow)>();
+        const int workersPerRow = ColWorkersEnd - ColWorkersStart + 1; // 5
 
         foreach (var t in orderedTasks)
         {
             if (t.DividerAbove && dataEntries.Count > 0)
-                dataEntries.Add((null, [], true)); // separator row
-            dataEntries.Add((t.Name, assignmentsByTask.GetValueOrDefault(t.Name, []), false));
+                dataEntries.Add((null, [], true, false));
+
+            var workers = assignmentsByTask.GetValueOrDefault(t.Name, []);
+            var chunks = workers.Chunk(workersPerRow).ToList();
+            if (chunks.Count == 0)
+                chunks.Add([]); // ensure at least one row
+
+            for (int c = 0; c < chunks.Count; c++)
+                dataEntries.Add((t.Name, chunks[c].ToList(), false, c == 0));
         }
 
         // Total rows = enough for tasks and all absent workers
@@ -176,32 +184,44 @@ public class ExcelExportService : IExcelExportService
                 continue;
             }
 
-            // Alternating row color
+            var isFirst = hasEntry && dataEntries[i].IsFirstRow;
+            if (isFirst || !hasEntry) colorIndex++;
             var rowBg = colorIndex % 2 == 0 ? XLColor.White : GrayColor;
-            colorIndex++;
 
-            var taskName = hasEntry ? dataEntries[i].TaskName : null;
             var workers = hasEntry ? dataEntries[i].Workers : [];
 
-            // Fill row A-H with alternating color (column I handled separately)
+            // Fill row A-H with alternating color
             for (int c = ColTaken; c <= ColBijzH; c++)
                 ws.Cell(r, c).Style.Fill.BackgroundColor = rowBg;
 
-            // Col A: Taken
-            if (taskName != null)
+            // Col A: Taken — only on first row, merged across continuation rows
+            if (isFirst && hasEntry)
             {
-                ws.Cell(r, ColTaken).Value = taskName;
+                var rowSpan = 1;
+                for (int j = i + 1; j < dataEntries.Count && !dataEntries[j].IsFirstRow && !dataEntries[j].IsSeparator; j++)
+                    rowSpan++;
+
+                if (rowSpan > 1)
+                    ws.Range(r, ColTaken, r + rowSpan - 1, ColTaken).Merge();
+
+                ws.Cell(r, ColTaken).Value = dataEntries[i].TaskName;
                 ws.Cell(r, ColTaken).Style.Font.Bold = true;
                 ws.Cell(r, ColTaken).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            }
-            OuterBorder(ws.Range(r, ColTaken, r, ColTaken));
+                ws.Cell(r, ColTaken).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-            // Cols B-F: Werknemers — outside border only, no internal dividers
-            for (int w = 0; w < workers.Count && w < ColWorkersEnd - ColWorkersStart + 1; w++)
+                OuterBorder(ws.Range(r, ColTaken, r + rowSpan - 1, ColTaken));
+            }
+            else if (!hasEntry)
+            {
+                OuterBorder(ws.Range(r, ColTaken, r, ColTaken));
+            }
+
+            // Cols B-F: Werknemers
+            for (int w = 0; w < workers.Count; w++)
                 ws.Cell(r, ColWorkersStart + w).Value = workers[w];
             ws.Range(r, ColWorkersStart, r, ColWorkersEnd).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
 
-            // Cols G-H: Bijzonderheden — individual cell borders (divider between G and H)
+            // Cols G-H: Bijzonderheden
             OuterBorder(ws.Range(r, ColBijzG, r, ColBijzG));
             OuterBorder(ws.Range(r, ColBijzH, r, ColBijzH));
 
