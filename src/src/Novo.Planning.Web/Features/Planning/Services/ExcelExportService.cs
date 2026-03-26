@@ -37,8 +37,14 @@ public class ExcelExportService : IExcelExportService
             .GroupBy(a => a.TaskName)
             .ToDictionary(g => g.Key, g => g.Select(a => a.WorkerName).ToList());
 
+        var customTaskDefs = planning.CustomTasks
+            .Where(ct => assignmentsByTask.ContainsKey(ct.TaskName))
+            .Select(ct => ct.ToTaskDefinition())
+            .ToList();
+
         var orderedTasks = tasks
             .Where(t => assignmentsByTask.ContainsKey(t.Name))
+            .Concat(customTaskDefs)
             .OrderBy(t => t.SortOrder)
             .ToList();
 

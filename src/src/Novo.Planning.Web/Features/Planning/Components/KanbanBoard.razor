@@ -64,6 +64,7 @@
             @foreach (var entry in allBoardTasks)
             {
                 var key = entry.TaskDef.Name;
+                var isCustom = entry.IsCustom;
                 var taskViolations = violationsByTask.GetValueOrDefault(key, []);
 
                 @if (entry.TaskDef.DividerAbove && taskIndex > 0)
@@ -71,14 +72,14 @@
                     <div class="board-divider d-flex align-items-center my-2" @onclick:stopPropagation="true">
                         <div class="divider-line flex-grow-1"></div>
                         <button class="btn btn-sm divider-remove-btn"
-                                @onclick="() => RemoveDivider(key)"
+                                @onclick="() => SetDivider(key, false)"
                                 title="Scheidingslijn verwijderen">&times;</button>
                         <div class="divider-line flex-grow-1"></div>
                     </div>
                 }
                 else if (taskIndex > 0)
                 {
-                    <div class="divider-insert-zone" @onclick="() => AddDivider(key)" @onclick:stopPropagation="true"
+                    <div class="divider-insert-zone" @onclick="() => SetDivider(key, true)" @onclick:stopPropagation="true"
                          title="Scheidingslijn toevoegen">
                         <span class="divider-insert-icon">+</span>
                     </div>
@@ -88,7 +89,7 @@
                               Assignments="@entry.Assignments"
                               TaskDef="@entry.TaskDef"
                               Violations="@taskViolations"
-                              OnRemove="@(() => ConfirmRemoveTaskFromBoard(key))"
+                              OnRemove="@(isCustom ? () => ConfirmRemoveCustomTask(key) : () => ConfirmRemoveTaskFromBoard(key))"
                               OnHeaderClick="@(() => ToggleHighlight(key))"
                               OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(key, workerName))"
                               OnClearAll="@(() => ClearAllFromTask(key))"
@@ -97,39 +98,12 @@
                               IsEditing="@(_editingTaskName == key)"
                               OnEditToggle="ToggleEditingTask"
                               OnTaskEdited="HandleTaskEdited"
-                              HeadcountOnly="@(key == ZeelandiaTaskName)"
+                              HeadcountOnly="@(isCustom || key == ZeelandiaTaskName)"
                               OnTempWorkerRenamed="OnTempWorkerRenamed" />
 
                 taskIndex++;
             }
         </div>
-
-        @if (Planning.CustomTasks.Count > 0)
-        {
-            <h5 class="mt-3" style="color: #59B6AD;">Aangepaste taken</h5>
-            @foreach (var ct in Planning.CustomTasks)
-            {
-                var taskName = ct.TaskName;
-                var assignments = Planning.Assignments.Where(a => a.TaskName == taskName).ToList();
-                var taskViolations = violationsByTask.GetValueOrDefault(taskName, []);
-                var customDef = ct.ToTaskDefinition();
-                <KanbanColumn TaskName="@taskName"
-                              Assignments="@assignments"
-                              TaskDef="@customDef"
-                              Violations="@taskViolations"
-                              OnRemove="@(() => ConfirmRemoveCustomTask(taskName))"
-                              OnHeaderClick="@(() => ToggleHighlight(taskName))"
-                              OnWorkerRemoved="@(workerName => RemoveWorkerFromTask(taskName, workerName))"
-                              OnClearAll="@(() => ClearAllFromTask(taskName))"
-                              HighlightedTaskName="@HighlightedTaskName"
-                              AllPersons="AllPersons"
-                              IsEditing="@(_editingTaskName == taskName)"
-                              OnEditToggle="ToggleEditingTask"
-                              OnTaskEdited="HandleTaskEdited"
-                              HeadcountOnly="true"
-                              OnTempWorkerRenamed="OnTempWorkerRenamed" />
-            }
-        }
 
         <div class="input-group mt-2 mb-3" style="max-width: 500px;"
              @onclick:stopPropagation="true"
@@ -381,7 +355,7 @@
         await OnHighlightChanged.InvokeAsync(HighlightedTaskName == taskName ? null : taskName);
     }
 
-    private record TaskColumnData(TaskDefinition TaskDef, List<PlanningAssignment> Assignments);
+    private record TaskColumnData(TaskDefinition TaskDef, List<PlanningAssignment> Assignments, bool IsCustom);
 
     private Dictionary<string, List<PlanningAssignment>>? _assignmentsByTask;
 
@@ -395,10 +369,13 @@
     private List<TaskColumnData> GetAllBoardTasks()
     {
         var grouped = GetAssignmentsByTask();
-        return AllTasks
+        var regular = AllTasks
             .Where(t => SelectedTaskIds.Contains(t.Id))
-            .OrderBy(t => t.SortOrder)
-            .Select(t => new TaskColumnData(t, grouped.GetValueOrDefault(t.Name, [])))
+            .Select(t => new TaskColumnData(t, grouped.GetValueOrDefault(t.Name, []), false));
+        var custom = (Planning?.CustomTasks ?? [])
+            .Select(ct => new TaskColumnData(ct.ToTaskDefinition(), grouped.GetValueOrDefault(ct.TaskName, []), true));
+        return regular.Concat(custom)
+            .OrderBy(e => e.TaskDef.SortOrder)
             .ToList();
     }
 
@@ -422,17 +399,22 @@
 
     private async Task HandleColumnDrop(string draggedName, string targetName)
     {
-        if (draggedName == targetName) return;
+        if (draggedName == targetName || Planning == null) return;
 
-        var dragged = AllTasks.FirstOrDefault(t => t.Name == draggedName && SelectedTaskIds.Contains(t.Id));
-        var target = AllTasks.FirstOrDefault(t => t.Name == targetName && SelectedTaskIds.Contains(t.Id));
+        // Build unified ordered list of all board task defs (regular + custom)
+        var regularDefs = AllTasks
+            .Where(t => SelectedTaskIds.Contains(t.Id))
+            .ToList();
+        var customDefs = Planning.CustomTasks
+            .Select(ct => ct.ToTaskDefinition())
+            .ToList();
+        var allDefs = regularDefs.Concat(customDefs).OrderBy(t => t.SortOrder).ToList();
+
+        var dragged = allDefs.FirstOrDefault(t => t.Name == draggedName);
+        var target = allDefs.FirstOrDefault(t => t.Name == targetName);
         if (dragged == null || target == null) return;
 
-        var siblings = AllTasks
-            .Where(t => SelectedTaskIds.Contains(t.Id) && t.Id != dragged.Id)
-            .OrderBy(t => t.SortOrder)
-            .ToList();
-
+        var siblings = allDefs.Where(t => t.Name != draggedName).ToList();
         var targetIndex = siblings.IndexOf(target);
         siblings.Insert(targetIndex, dragged);
 
@@ -441,9 +423,15 @@
             if (siblings[i].SortOrder != i)
             {
                 siblings[i].SortOrder = i;
-                await OnTaskMoved.InvokeAsync(siblings[i]);
+                var ct = Planning.CustomTasks.FirstOrDefault(c => c.TaskName == siblings[i].Name);
+                if (ct != null)
+                    ct.SortOrder = i;
+                else
+                    await OnTaskMoved.InvokeAsync(siblings[i]);
             }
         }
+
+        await OnAssignmentChanged.InvokeAsync();
     }
 
     // Confirmation wrappers (#8)
@@ -525,10 +513,18 @@
         if (string.IsNullOrWhiteSpace(name) || Planning == null) return;
         if (Planning.CustomTasks.Any(ct => ct.TaskName.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
 
+        var maxSort = AllTasks
+            .Where(t => SelectedTaskIds.Contains(t.Id))
+            .Select(t => t.SortOrder)
+            .Concat(Planning.CustomTasks.Select(ct => ct.SortOrder))
+            .DefaultIfEmpty(-1)
+            .Max();
+
         Planning.CustomTasks.Add(new CustomTask
         {
             TaskName = name,
-            HeadcountRequired = Math.Max(1, _newCustomTaskHeadcount)
+            HeadcountRequired = Math.Max(1, _newCustomTaskHeadcount),
+            SortOrder = maxSort + 1
         });
         _newCustomTaskName = "";
         _newCustomTaskHeadcount = 2;
@@ -576,7 +572,6 @@
     {
         if (Planning == null) return;
 
-        // Check if it's a custom task
         var customTask = Planning.CustomTasks.FirstOrDefault(ct => ct.TaskName == editedDef.Name);
         if (customTask != null)
         {
@@ -589,19 +584,18 @@
         await OnTaskEdited.InvokeAsync(editedDef);
     }
 
-    private async Task AddDivider(string taskName)
+    private async Task SetDivider(string taskName, bool value)
     {
+        var ct = Planning?.CustomTasks.FirstOrDefault(c => c.TaskName == taskName);
+        if (ct != null)
+        {
+            ct.DividerAbove = value;
+            await OnAssignmentChanged.InvokeAsync();
+            return;
+        }
         var task = AllTasks.FirstOrDefault(t => t.Name == taskName);
         if (task == null) return;
-        task.DividerAbove = true;
-        await OnTaskMoved.InvokeAsync(task);
-    }
-
-    private async Task RemoveDivider(string taskName)
-    {
-        var task = AllTasks.FirstOrDefault(t => t.Name == taskName);
-        if (task == null) return;
-        task.DividerAbove = false;
+        task.DividerAbove = value;
         await OnTaskMoved.InvokeAsync(task);
     }
 

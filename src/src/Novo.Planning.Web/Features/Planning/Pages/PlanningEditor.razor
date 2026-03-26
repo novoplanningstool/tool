@@ -440,6 +440,17 @@ else
             .ToList();
     }
 
+    private (List<CustomTask> Tasks, List<PlanningAssignment> Assignments, HashSet<string> WorkerNames) GetPreservedCustomTaskData()
+    {
+        var tasks = _planning?.CustomTasks ?? [];
+        var taskNames = tasks.Select(ct => ct.TaskName).ToHashSet();
+        var assignments = _planning?.Assignments
+            .Where(a => taskNames.Contains(a.TaskName))
+            .ToList() ?? [];
+        var workerNames = assignments.Select(a => a.WorkerName).ToHashSet();
+        return (tasks, assignments, workerNames);
+    }
+
     private void ToggleTask(string id, bool selected)
     {
         if (selected)
@@ -489,6 +500,14 @@ else
             var zeelandiaAssignments = GetZeelandiaAssignments();
             ExcludeZeelandiaFromSolverSettings(zeelandiaAssignments);
 
+            // Custom tasks: preserve assignments and exclude workers from solver
+            var (customTasks, customTaskAssignments, customTaskWorkerNames) = GetPreservedCustomTaskData();
+            var personIdToName = _allPersons.ToDictionary(p => p.Id, p => p.Name);
+            _settings.PresentWorkerIds = _settings.PresentWorkerIds
+                .Where(id => !customTaskWorkerNames.Contains(
+                    personIdToName.GetValueOrDefault(id, "")))
+                .ToList();
+
             // Run solver on background thread so the UI can render the spinner
             _solverResult = await Task.Run(() => PlanningService.GeneratePlanningAsync(_settings));
 
@@ -499,7 +518,8 @@ else
                     DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
                     Strategy = _settings.Strategy,
                     TempWorkerCount = _settings.TempWorkerCount,
-                    Assignments = zeelandiaAssignments.Concat(_solverResult.Assignments).ToList(),
+                    Assignments = zeelandiaAssignments.Concat(customTaskAssignments).Concat(_solverResult.Assignments).ToList(),
+                    CustomTasks = customTasks.ToList(),
                     Warnings = _solverResult.Warnings,
                     AbsentWorkers = absentNames.ToList(),
                 };
@@ -571,6 +591,8 @@ else
         var absentNames = _planning?.AbsentWorkers.ToHashSet() ?? [];
         var zeelandiaAssignments = GetZeelandiaAssignments();
         var zeelandiaWorkerNames = zeelandiaAssignments.Select(a => a.WorkerName).ToHashSet();
+        var (customTasks, customTaskAssignments, customTaskWorkerNames) = GetPreservedCustomTaskData();
+        var excludedWorkers = zeelandiaWorkerNames.Union(customTaskWorkerNames).ToHashSet();
         var selectedTasks = _allTasks
             .Where(t => _selectedTaskIds.Contains(t.Id) &&
                         !(_zeelandiaEnabled && _zeelandiaTask != null && t.Id == _zeelandiaTask.Id))
@@ -578,8 +600,8 @@ else
         // Regular workers first, then temp workers (prefer non-temp)
         var availableWorkers = _allPersons
             .Where(p => !p.IsTempWorker && p.Id != WellKnownIds.TempWorkerTemplateId && !absentNames.Contains(p.Name)
-                        && !zeelandiaWorkerNames.Contains(p.Name))
-            .Concat(_tempWorkers.Where(p => !zeelandiaWorkerNames.Contains(p.Name)))
+                        && !excludedWorkers.Contains(p.Name))
+            .Concat(_tempWorkers.Where(p => !excludedWorkers.Contains(p.Name)))
             .ToList();
 
         var rng = new Random();
@@ -693,7 +715,8 @@ else
             DayName = DaySelector.ToDutchName(_settings.DayOfWeek),
             Strategy = _settings.Strategy,
             TempWorkerCount = _settings.TempWorkerCount,
-            Assignments = zeelandiaAssignments.Concat(assignments).ToList(),
+            Assignments = zeelandiaAssignments.Concat(customTaskAssignments).Concat(assignments).ToList(),
+            CustomTasks = customTasks.ToList(),
             AbsentWorkers = absentNames.ToList(),
         };
 
