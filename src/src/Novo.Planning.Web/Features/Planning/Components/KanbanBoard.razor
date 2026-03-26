@@ -19,11 +19,25 @@
         var assignedWorkers = Planning.Assignments
             .Where(a => a.TaskName != ZeelandiaTaskName)
             .Select(a => a.WorkerName).ToHashSet();
-        var unassignedCount = AllPersons.Count(p =>
-            !p.IsTempWorker
-            && p.Id != WellKnownIds.TempWorkerTemplateId
-            && !assignedWorkers.Contains(p.Name)
-            && !Planning.AbsentWorkers.Contains(p.Name));
+        var absentNames = Planning.AbsentWorkers.ToHashSet();
+        var unassignedCount = 0;
+        foreach (var p in AllPersons)
+        {
+            if (p.IsTempWorker || p.Id == WellKnownIds.TempWorkerTemplateId || absentNames.Contains(p.Name))
+                continue;
+            if (!assignedWorkers.Contains(p.Name))
+                unassignedCount++;
+        }
+        var totalRequired = 0;
+        var totalFilled = 0;
+        foreach (var e in allBoardTasks)
+        {
+            if (e.TaskDef.Name == ZeelandiaTaskName) continue;
+            totalRequired += e.TaskDef.HeadcountRequired;
+            totalFilled += Math.Min(e.Assignments.Count, e.TaskDef.HeadcountRequired);
+        }
+        var totalMissing = totalRequired - totalFilled;
+        var extraTempsNeeded = Math.Max(0, totalMissing - unassignedCount);
         var errorCount = Violations.Count(v => v.Severity == ViolationSeverity.Error);
         var warningCount = Violations.Count(v => v.Severity == ViolationSeverity.Warning);
         var problemCount = errorCount + warningCount;
@@ -34,13 +48,26 @@
             <div class="planning-progress @progressClass mb-2 d-flex align-items-center justify-content-between">
                 <span>
                     Planning: <strong>@completeTasks/@totalTasks</strong> taken compleet
+                    <span class="progress-divider">|</span>
+                    Bezetting: <strong class="@(totalMissing > 0 ? "staffing-short" : "staffing-full")">@totalFilled/@totalRequired</strong>
+                    @if (totalMissing > 0)
+                    {
+                        <text> </text><span class="staffing-missing">@totalMissing tekort</span>
+                    }
                     @if (unassignedCount > 0)
                     {
-                        <text> | </text><strong>@unassignedCount</strong><text> niet ingepland</text>
+                        <span class="progress-divider">|</span><strong>@unassignedCount</strong><text> niet ingepland</text>
                     }
                     @if (problemCount > 0)
                     {
-                        <text> | </text><strong>@problemCount</strong><text> problemen</text>
+                        <span class="progress-divider">|</span><strong>@problemCount</strong><text> problemen</text>
+                    }
+                    @if (extraTempsNeeded > 0)
+                    {
+                        <span class="progress-divider">|</span>
+                        <span class="staffing-temps-needed" title="Niet genoeg beschikbare medewerkers voor alle taken">
+                            +@extraTempsNeeded uitzendkracht@(extraTempsNeeded != 1 ? "en" : "") nodig
+                        </span>
                     }
                 </span>
                 @if (_undoSnapshot != null)

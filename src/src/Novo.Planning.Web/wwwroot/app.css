@@ -265,6 +265,38 @@ h1:focus {
     border-color: rgba(209, 55, 74, 0.2);
 }
 
+.progress-divider {
+    margin: 0 6px;
+    opacity: 0.4;
+}
+
+.staffing-full {
+    color: var(--novo-success);
+}
+
+.staffing-short {
+    color: var(--novo-error);
+}
+
+.staffing-missing,
+.staffing-temps-needed {
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: white;
+    letter-spacing: 0.01em;
+    margin-left: 2px;
+}
+
+.staffing-missing {
+    background: var(--novo-error);
+}
+
+.staffing-temps-needed {
+    background: var(--novo-temp);
+}
+
 /* ============================================================
    Slot badge styles (skill requirements)
    ============================================================ */
