@@ -251,11 +251,20 @@
             return;
         }
 
+        // Zeelandia is an overlay task: dropping onto Zeelandia never removes other assignments.
+        // Dragging from Zeelandia to another task is blocked if already assigned to a regular/custom task.
+        if (sourceTask == ZeelandiaTaskName && targetTaskName != ZeelandiaTaskName
+            && Planning.Assignments.Any(a => a.WorkerName == workerName && a.TaskName != ZeelandiaTaskName))
+        {
+            await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", targetTaskName);
+            return;
+        }
+
         SaveUndoSnapshot();
 
         Planning.AbsentWorkers.Remove(workerName);
 
-        if (!string.IsNullOrEmpty(sourceTask))
+        if (targetTaskName != ZeelandiaTaskName && !string.IsNullOrEmpty(sourceTask))
         {
             Planning.Assignments.RemoveAll(a => a.TaskName == sourceTask && a.WorkerName == workerName);
         }
@@ -312,10 +321,7 @@
 
         SaveUndoSnapshot();
 
-        if (!string.IsNullOrEmpty(sourceTask) && sourceTask != "__absent__")
-        {
-            Planning.Assignments.RemoveAll(a => a.TaskName == sourceTask && a.WorkerName == workerName);
-        }
+        Planning.Assignments.RemoveAll(a => a.WorkerName == workerName);
 
         if (!Planning.AbsentWorkers.Contains(workerName))
         {
