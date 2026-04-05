@@ -1,5 +1,4 @@
 using Novo.Planning.Infrastructure;
-using Novo.Planning.Solver;
 using Novo.Planning.Web.Components;
 using Novo.Planning.Web.Features.Planning.Services;
 
@@ -12,14 +11,11 @@ builder.Services.AddRazorComponents()
 // Infrastructure (in-memory repositories)
 builder.Services.AddInMemoryInfrastructure();
 
-// Solver
-builder.Services.AddScoped<ISolverService, SolverService>();
-
 // Feature services
+builder.Services.AddSingleton<IPlanningGeneratorService, HeuristicPlanningGenerator>();
 builder.Services.AddScoped<IPlanningService, PlanningService>();
 builder.Services.AddScoped<IComplianceValidator, ComplianceValidator>();
 builder.Services.AddScoped<IExcelExportService, ExcelExportService>();
-
 
 var app = builder.Build();
 

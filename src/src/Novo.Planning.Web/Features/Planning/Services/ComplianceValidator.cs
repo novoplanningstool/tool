@@ -169,9 +169,11 @@ public class ComplianceValidator : IComplianceValidator
     {
         foreach (var (workerName, assignments) in assignmentsByWorker)
         {
-            if (assignments.Count > 1)
+            // Zeelandia is a secondary task — workers can have their main task + Zeelandia
+            var nonZeelandia = assignments.Where(a => a.TaskName != WellKnownIds.ZeelandiaTaskName).ToList();
+            if (nonZeelandia.Count > 1)
             {
-                var taskNames = string.Join(", ", assignments.Select(a => $"'{a.TaskName}'"));
+                var taskNames = string.Join(", ", nonZeelandia.Select(a => $"'{a.TaskName}'"));
                 violations.Add(new ComplianceViolation
                 {
                     Severity = ViolationSeverity.Error,

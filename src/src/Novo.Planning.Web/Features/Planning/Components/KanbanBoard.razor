@@ -497,7 +497,6 @@
         if (Planning == null) return;
         SaveUndoSnapshot();
         var assignedWorkers = Planning.Assignments
-            .Where(a => a.TaskName != ZeelandiaTaskName)
             .Select(a => a.WorkerName).ToHashSet();
         var unplanned = AllPersons
             .Where(p => !p.IsTempWorker

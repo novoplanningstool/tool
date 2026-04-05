@@ -14,7 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Novo.Planning.Domain\Novo.Planning.Domain.csproj" />
     <ProjectReference Include="..\Novo.Planning.Infrastructure\Novo.Planning.Infrastructure.csproj" />
-    <ProjectReference Include="..\Novo.Planning.Solver\Novo.Planning.Solver.csproj" />
   </ItemGroup>
 
 </Project>

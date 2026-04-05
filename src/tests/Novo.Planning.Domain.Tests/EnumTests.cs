@@ -21,19 +21,7 @@ public class EnumTests
         ((int)BoardPosition.Right).Should().Be(2);
     }
 
-    [Fact]
-    public void OptimizationStrategy_HasThreeValues()
-    {
-        Enum.GetValues<OptimizationStrategy>().Should().HaveCount(3);
-    }
-
-    [Fact]
-    public void SolverStatus_HasFourValues()
-    {
-        Enum.GetValues<SolverStatus>().Should().HaveCount(4);
-    }
-
-    [Fact]
+[Fact]
     public void ViolationSeverity_HasTwoValues()
     {
         Enum.GetValues<ViolationSeverity>().Should().HaveCount(2);
@@ -74,7 +62,7 @@ public class ModelDefaultTests
         planning.CustomTasks.Should().BeEmpty();
         planning.PinnedAssignments.Should().BeEmpty();
         planning.AbsentWorkers.Should().BeEmpty();
-        planning.Warnings.Should().BeEmpty();
+
         planning.IsTemplate.Should().BeFalse();
     }
 }

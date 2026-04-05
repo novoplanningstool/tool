@@ -71,6 +71,31 @@ public class ComplianceValidatorTests
     }
 
     [Fact]
+    public void Validate_WorkerOnMainTaskPlusZeelandia_NoOverallocationError()
+    {
+        var planning = new PlanningModel
+        {
+            Assignments =
+            [
+                new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Expert },
+                new() { TaskName = WellKnownIds.ZeelandiaTaskName, WorkerName = "Alice", SkillLevel = SkillLevel.Expert },
+                new() { TaskName = "TaskB", WorkerName = "Bob", SkillLevel = SkillLevel.Expert },
+            ]
+        };
+
+        var tasks = new List<TaskDefinition>
+        {
+            new() { Id = "t1", Name = "TaskA", HeadcountRequired = 1 },
+            new() { Id = "t2", Name = "TaskB", HeadcountRequired = 1 },
+            new() { Id = "t3", Name = WellKnownIds.ZeelandiaTaskName, HeadcountRequired = 1 },
+        };
+
+        var violations = _validator.Validate(planning, CreateBasicPersons(), tasks);
+        violations.Should().NotContain(v => v.WorkerName == "Alice" && v.Severity == ViolationSeverity.Error
+            && v.Message.Contains("meerdere taken"));
+    }
+
+    [Fact]
     public void Validate_SkillLevel4Assignment_ReturnsError()
     {
         var persons = new List<Person>
