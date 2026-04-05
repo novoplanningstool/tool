@@ -262,7 +262,7 @@
         if (Planning == null) return;
 
         // Absent workers can only be dragged to unplanned, not to tasks
-        if (sourceTask == "__absent__")
+        if (sourceTask == WellKnownIds.AbsentDropZone)
         {
             await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", targetTaskName);
             return;
@@ -322,7 +322,7 @@
 
         SaveUndoSnapshot();
 
-        if (!string.IsNullOrEmpty(sourceTask) && sourceTask != "__absent__")
+        if (!string.IsNullOrEmpty(sourceTask) && sourceTask != WellKnownIds.AbsentDropZone)
         {
             Planning.Assignments.RemoveAll(a => a.TaskName == sourceTask && a.WorkerName == workerName);
         }
@@ -342,7 +342,7 @@
         var person = AllPersons.FirstOrDefault(p => p.Name == workerName);
         if (person?.IsTempWorker == true)
         {
-            await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", "__absent__");
+            await JSRuntime.InvokeVoidAsync("novoDragDrop.flashReject", WellKnownIds.AbsentDropZone);
             return;
         }
 
@@ -543,7 +543,12 @@
     {
         var name = _newCustomTaskName.Trim();
         if (string.IsNullOrWhiteSpace(name) || Planning == null) return;
-        if (Planning.CustomTasks.Any(ct => ct.TaskName.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
+        if (Planning.CustomTasks.Any(ct => ct.TaskName.Equals(name, StringComparison.OrdinalIgnoreCase))
+            || AllTasks.Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"De taaknaam '{name}' bestaat al.");
+            return;
+        }
 
         var maxSort = AllTasks
             .Where(t => SelectedTaskIds.Contains(t.Id))
@@ -640,11 +645,14 @@
 
         var skillLevel = ResolveSkillLevel(person, HighlightedTaskName);
 
-        // Reject if already assigned to this task
         if (Planning.Assignments.Any(a => a.TaskName == HighlightedTaskName && a.WorkerName == workerName))
             return;
 
         SaveUndoSnapshot();
+
+        // Remove from current non-Zeelandia task (same as drag behavior)
+        if (HighlightedTaskName != ZeelandiaTaskName)
+            Planning.Assignments.RemoveAll(a => a.WorkerName == workerName && a.TaskName != ZeelandiaTaskName);
 
         Planning.Assignments.Add(new PlanningAssignment
         {

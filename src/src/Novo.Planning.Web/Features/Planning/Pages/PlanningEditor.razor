@@ -3,7 +3,6 @@
 @using Novo.Planning.Infrastructure.Import
 @using Novo.Planning.Web.Features.Planning.Components
 @using Novo.Planning.Web.Features.Planning.Services
-@inject IPlanningService PlanningService
 @inject IExcelImportService ImportService
 @inject IPersonRepository PersonRepository
 @inject ITaskDefinitionRepository TaskRepository
@@ -329,12 +328,19 @@ else
         }
     }
 
-    private void OnTempWorkerRenamed((string OldName, string NewName) args)
+    private async Task OnTempWorkerRenamed((string OldName, string NewName) args)
     {
         var worker = _tempWorkers.FirstOrDefault(p => p.Name == args.OldName);
         if (worker == null) return;
 
+        if (AllPersonsIncludingTemp.Any(p => p.Name == args.NewName && p.Name != args.OldName))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"De naam '{args.NewName}' is al in gebruik.");
+            return;
+        }
+
         worker.Name = args.NewName;
+        RebuildAllPersonsCache();
 
         if (_planning != null)
         {
@@ -448,7 +454,7 @@ else
                 CustomTasks = customTasks.ToList(),
                 AbsentWorkers = absentNames.ToList(),
             };
-            await PlanningService.SavePlanningAsync(_planning);
+            await PlanningRepository.UpsertAsync(_planning);
             RunComplianceCheck();
         }
         catch (Exception ex)
@@ -499,7 +505,7 @@ else
             if (!confirmed) return;
         }
 
-        var bytes = ExcelExportService.Export(_planning);
+        var bytes = await ExcelExportService.ExportAsync(_planning);
         var base64 = Convert.ToBase64String(bytes);
         await JSRuntime.InvokeVoidAsync("novoExport.downloadFile", "planning.xlsx", base64);
     }

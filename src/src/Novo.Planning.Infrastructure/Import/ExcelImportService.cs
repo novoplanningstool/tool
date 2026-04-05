@@ -30,6 +30,7 @@ public class ExcelImportService : IExcelImportService
 
     public async Task ImportAsync(string filePath)
     {
+        await UnloadAsync();
         using var workbook = new XLWorkbook(filePath);
         await ImportFromWorkbookAsync(workbook);
     }
@@ -52,36 +53,52 @@ public class ExcelImportService : IExcelImportService
 
     private async Task ImportFromWorkbookAsync(XLWorkbook workbook)
     {
-        var taskDefinitions = ImportTasks(workbook.Worksheet("Taken"));
+        var takenSheet = workbook.Worksheets.FirstOrDefault(ws => ws.Name == "Taken")
+            ?? throw new InvalidOperationException("Werkblad 'Taken' ontbreekt in het Excel-bestand.");
+        var werknemersSheet = workbook.Worksheets.FirstOrDefault(ws => ws.Name == "Werknemers")
+            ?? throw new InvalidOperationException("Werkblad 'Werknemers' ontbreekt in het Excel-bestand.");
+        var uitzendkrachtSheet = workbook.Worksheets.FirstOrDefault(ws => ws.Name == "Uitzendkracht");
+
+        var taskDefinitions = ImportTasks(takenSheet);
         foreach (var task in taskDefinitions)
         {
             await _taskDefinitionRepository.UpsertAsync(task);
         }
 
         var taskNames = taskDefinitions.Select(t => t.Name).ToHashSet();
-        var persons = ImportPersons(workbook.Worksheet("Werknemers"), taskNames);
+        var persons = ImportPersons(werknemersSheet, taskNames);
         foreach (var person in persons)
         {
             await _personRepository.UpsertAsync(person);
         }
 
-        // Import temp worker template as a special person
-        var tempWorker = ImportTempWorkerTemplate(workbook.Worksheet("Uitzendkracht"), taskNames);
-        if (tempWorker != null)
+        if (uitzendkrachtSheet != null)
         {
-            await _personRepository.UpsertAsync(tempWorker);
+            var tempWorker = ImportTempWorkerTemplate(uitzendkrachtSheet, taskNames);
+            if (tempWorker != null)
+            {
+                await _personRepository.UpsertAsync(tempWorker);
+            }
         }
+    }
+
+    private static Dictionary<string, int>? ParseHeaders(IXLWorksheet sheet)
+    {
+        var headerRow = sheet.FirstRowUsed();
+        if (headerRow == null) return null;
+        var lastCell = headerRow.LastCellUsed();
+        if (lastCell == null) return null;
+        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int col = 1; col <= lastCell.Address.ColumnNumber; col++)
+            headers[headerRow.Cell(col).GetString().Trim()] = col;
+        return headers;
     }
 
     private static List<TaskDefinition> ImportTasks(IXLWorksheet sheet)
     {
         var tasks = new List<TaskDefinition>();
-        var headerRow = sheet.FirstRowUsed()!;
-        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (int col = 1; col <= headerRow.LastCellUsed()!.Address.ColumnNumber; col++)
-        {
-            headers[headerRow.Cell(col).GetString().Trim()] = col;
-        }
+        var headers = ParseHeaders(sheet);
+        if (headers == null) return tasks;
 
         var sortOrder = 0;
         foreach (var row in sheet.RowsUsed().Skip(1))
@@ -120,12 +137,8 @@ public class ExcelImportService : IExcelImportService
     private static List<Person> ImportPersons(IXLWorksheet sheet, HashSet<string> taskNames)
     {
         var persons = new List<Person>();
-        var headerRow = sheet.FirstRowUsed()!;
-        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (int col = 1; col <= headerRow.LastCellUsed()!.Address.ColumnNumber; col++)
-        {
-            headers[headerRow.Cell(col).GetString().Trim()] = col;
-        }
+        var headers = ParseHeaders(sheet);
+        if (headers == null) return persons;
 
         foreach (var row in sheet.RowsUsed().Skip(1))
         {
@@ -150,12 +163,8 @@ public class ExcelImportService : IExcelImportService
 
     private static Person? ImportTempWorkerTemplate(IXLWorksheet sheet, HashSet<string> taskNames)
     {
-        var headerRow = sheet.FirstRowUsed()!;
-        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (int col = 1; col <= headerRow.LastCellUsed()!.Address.ColumnNumber; col++)
-        {
-            headers[headerRow.Cell(col).GetString().Trim()] = col;
-        }
+        var headers = ParseHeaders(sheet);
+        if (headers == null) return null;
 
         var dataRow = sheet.RowsUsed().Skip(1).FirstOrDefault();
         if (dataRow == null) return null;

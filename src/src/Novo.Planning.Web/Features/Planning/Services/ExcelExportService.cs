@@ -28,9 +28,9 @@ public class ExcelExportService : IExcelExportService
         _environment = environment;
     }
 
-    public byte[] Export(PlanningModel planning)
+    public async Task<byte[]> ExportAsync(PlanningModel planning)
     {
-        var tasks = _taskRepository.GetAllAsync().GetAwaiter().GetResult();
+        var tasks = await _taskRepository.GetAllAsync();
 
         var assignmentsByTask = planning.Assignments
             .Where(a => !string.IsNullOrEmpty(a.TaskName))
@@ -65,8 +65,9 @@ public class ExcelExportService : IExcelExportService
         // ============================================================
         // 1. Logo — floating, 5 rows high, not attached to a cell
         // ============================================================
-        var logoPath = Path.Combine(_environment.WebRootPath, "NOVO-Logo.png");
-        if (File.Exists(logoPath))
+        var webRoot = _environment.WebRootPath;
+        var logoPath = webRoot != null ? Path.Combine(webRoot, "NOVO-Logo.png") : null;
+        if (logoPath != null && File.Exists(logoPath))
         {
             var picture = ws.AddPicture(logoPath);
             picture.MoveTo(ws.Cell(1, 1), 0, 0);
@@ -79,8 +80,8 @@ public class ExcelExportService : IExcelExportService
         // ============================================================
         if (planning.DayName.Equals("Vrijdag", StringComparison.OrdinalIgnoreCase))
         {
-            var fridayImagePath = Path.Combine(_environment.WebRootPath, "frikandellen.png");
-            if (File.Exists(fridayImagePath))
+            var fridayImagePath = webRoot != null ? Path.Combine(webRoot, "frikandellen.png") : null;
+            if (fridayImagePath != null && File.Exists(fridayImagePath))
             {
                 var picture = ws.AddPicture(fridayImagePath);
                 picture.MoveTo(ws.Cell(1, 4), 0, 0);
@@ -235,7 +236,7 @@ public class ExcelExportService : IExcelExportService
                 ws.Cell(r, ColAfwezig).Value = planning.AbsentWorkers[absentIdx++];
         }
 
-        var lastDataRow = dataStartRow + totalRows - 1;
+        var lastDataRow = dataStartRow + Math.Max(totalRows, 1) - 1;
 
         // ============================================================
         // 8. Afwezigen column — light orange fill, no internal borders

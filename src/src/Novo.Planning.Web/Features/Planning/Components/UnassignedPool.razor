@@ -102,7 +102,7 @@
                 <span class="badge @GetAbsentBadgeClass(person) me-1 mb-1"
                       draggable="true"
                       data-drag-worker="@name"
-                      data-drag-source="__absent__"
+                      data-drag-source="@WellKnownIds.AbsentDropZone"
                       style="cursor: grab; font-size: 0.8rem;">
                     @if (person?.SpeaksPolish == true) {<span class="fi fi-pl flag-icon"></span>}
                     @name

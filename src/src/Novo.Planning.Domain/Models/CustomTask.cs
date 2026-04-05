@@ -2,6 +2,7 @@ namespace Novo.Planning.Domain.Models;
 
 public class CustomTask
 {
+    public string Id { get; set; } = Guid.NewGuid().ToString();
     public string TaskName { get; set; } = string.Empty;
     public int HeadcountRequired { get; set; } = 2;
     public int MinWorkersLevel1 { get; set; }
@@ -13,6 +14,7 @@ public class CustomTask
 
     public TaskDefinition ToTaskDefinition() => new()
     {
+        Id = Id,
         Name = TaskName,
         HeadcountRequired = HeadcountRequired,
         MinWorkersLevel1 = MinWorkersLevel1,

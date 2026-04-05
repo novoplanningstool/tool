@@ -166,4 +166,141 @@ public class ComplianceValidatorTests
         var violations = _validator.Validate(planning, persons, tasks);
         violations.Should().Contain(v => v.Severity == ViolationSeverity.Warning && v.TaskName == "TaskA");
     }
+
+    [Fact]
+    public void Validate_WorkerOnTwoNonZeelandiaTasks_ReturnsOverallocationError()
+    {
+        var planning = new PlanningModel
+        {
+            Assignments =
+            [
+                new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Expert },
+                new() { TaskName = "TaskB", WorkerName = "Alice", SkillLevel = SkillLevel.Experienced },
+                new() { TaskName = WellKnownIds.ZeelandiaTaskName, WorkerName = "Alice", SkillLevel = SkillLevel.Expert },
+            ]
+        };
+
+        var tasks = new List<TaskDefinition>
+        {
+            new() { Id = "t1", Name = "TaskA", HeadcountRequired = 1 },
+            new() { Id = "t2", Name = "TaskB", HeadcountRequired = 1 },
+            new() { Id = "t3", Name = WellKnownIds.ZeelandiaTaskName, HeadcountRequired = 1 },
+        };
+
+        var violations = _validator.Validate(planning, CreateBasicPersons(), tasks);
+        violations.Should().Contain(v => v.WorkerName == "Alice" && v.Severity == ViolationSeverity.Error
+            && v.Message.Contains("meerdere taken"));
+    }
+
+    [Fact]
+    public void Validate_UnassignedWorker_ReturnsWarning()
+    {
+        var planning = new PlanningModel
+        {
+            Assignments =
+            [
+                new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Expert },
+            ]
+        };
+
+        var violations = _validator.Validate(planning, CreateBasicPersons(), CreateBasicTasks());
+        violations.Should().Contain(v => v.Severity == ViolationSeverity.Warning && v.Message.Contains("Bob"));
+    }
+
+    [Fact]
+    public void Validate_AbsentWorkerNotFlaggedAsUnassigned()
+    {
+        var planning = new PlanningModel
+        {
+            Assignments =
+            [
+                new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Expert },
+            ],
+            AbsentWorkers = ["Bob"]
+        };
+
+        var violations = _validator.Validate(planning, CreateBasicPersons(), CreateBasicTasks());
+        violations.Should().NotContain(v => v.Severity == ViolationSeverity.Warning && v.Message.Contains("Bob"));
+    }
+
+    [Fact]
+    public void Validate_CustomTaskIncludedInValidation()
+    {
+        var customTask = new CustomTask
+        {
+            TaskName = "CustomWork",
+            HeadcountRequired = 1
+        };
+
+        var planning = new PlanningModel
+        {
+            Assignments = [],
+            CustomTasks = [customTask]
+        };
+
+        var tasks = new List<TaskDefinition> { customTask.ToTaskDefinition() };
+
+        var violations = _validator.Validate(planning, CreateBasicPersons(), tasks);
+        violations.Should().Contain(v => v.TaskName == "CustomWork" && v.Severity == ViolationSeverity.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateTaskNames_DoesNotThrow()
+    {
+        var tasks = new List<TaskDefinition>
+        {
+            new() { Id = "t1", Name = "TaskA", HeadcountRequired = 1 },
+            new() { Id = "t2", Name = "TaskA", HeadcountRequired = 1 },
+        };
+        var planning = new PlanningModel
+        {
+            Assignments = [new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Expert }]
+        };
+
+        var act = () => _validator.Validate(planning, CreateBasicPersons(), tasks);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Validate_DuplicatePersonNames_DoesNotThrow()
+    {
+        var persons = new List<Person>
+        {
+            new() { Id = "p1", Name = "Alice", SpeaksDutch = true, Skills = new() { ["TaskA"] = SkillLevel.Expert } },
+            new() { Id = "p2", Name = "Alice", SpeaksDutch = true, Skills = new() { ["TaskA"] = SkillLevel.Beginner } },
+        };
+        var planning = new PlanningModel
+        {
+            Assignments = [new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Expert }]
+        };
+
+        var act = () => _validator.Validate(planning, persons, CreateBasicTasks());
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Validate_MinLevel2NotMet_ReturnsWarning()
+    {
+        var persons = new List<Person>
+        {
+            new() { Id = "p1", Name = "Alice", Skills = new() { ["TaskA"] = SkillLevel.Beginner } },
+            new() { Id = "p2", Name = "Bob", Skills = new() { ["TaskA"] = SkillLevel.Beginner } },
+        };
+        var tasks = new List<TaskDefinition>
+        {
+            new() { Id = "t1", Name = "TaskA", HeadcountRequired = 2, MinWorkersLevel2 = 1 },
+        };
+        var planning = new PlanningModel
+        {
+            Assignments =
+            [
+                new() { TaskName = "TaskA", WorkerName = "Alice", SkillLevel = SkillLevel.Beginner },
+                new() { TaskName = "TaskA", WorkerName = "Bob", SkillLevel = SkillLevel.Beginner },
+            ]
+        };
+
+        var violations = _validator.Validate(planning, persons, tasks);
+        violations.Should().Contain(v => v.Severity == ViolationSeverity.Warning
+            && v.TaskName == "TaskA" && v.Message.Contains("niveau 2"));
+    }
 }

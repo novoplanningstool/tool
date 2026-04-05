@@ -11,8 +11,8 @@ public class ComplianceValidator : IComplianceValidator
     {
         var violations = new List<ComplianceViolation>();
 
-        var taskLookup = tasks.ToDictionary(t => t.Name, t => t);
-        var personLookup = persons.ToDictionary(p => p.Name, p => p);
+        var taskLookup = tasks.GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First());
+        var personLookup = persons.GroupBy(p => p.Name).ToDictionary(g => g.Key, g => g.First());
 
         // Group assignments by task
         var assignmentsByTask = planning.Assignments

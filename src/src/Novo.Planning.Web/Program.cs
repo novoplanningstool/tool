@@ -13,7 +13,6 @@ builder.Services.AddInMemoryInfrastructure();
 
 // Feature services
 builder.Services.AddSingleton<IPlanningGeneratorService, HeuristicPlanningGenerator>();
-builder.Services.AddScoped<IPlanningService, PlanningService>();
 builder.Services.AddScoped<IComplianceValidator, ComplianceValidator>();
 builder.Services.AddScoped<IExcelExportService, ExcelExportService>();
 
